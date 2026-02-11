@@ -78,6 +78,19 @@
         .win-streak { display: flex; align-items: baseline; gap: 6px; margin-top: 4px; }
         .win-count { font-size: 1.2rem; font-weight: 700; color: #e5a147; }
         .win-label { font-size: 0.7rem; color: #666; }
+        .win-streak.hot .win-count { color: #f97316; }
+        .win-streak.on-fire .win-count { color: #ef4444; text-shadow: 0 0 12px rgba(239,68,68,0.5); }
+        .win-streak.on-fire .win-label { color: #ef4444; }
+        .win-streak.legendary .win-count { color: #f5c518; text-shadow: 0 0 16px rgba(245,197,24,0.6); font-size: 1.4rem; }
+        .win-streak.legendary .win-label { color: #f5c518; }
+        .streak-badge {
+            display: inline-block; font-size: 0.65rem; font-weight: 700;
+            padding: 2px 8px; border-radius: 10px; margin-left: 8px;
+            text-transform: uppercase; letter-spacing: 0.5px;
+        }
+        .streak-badge.hot { background: rgba(249,115,22,0.15); color: #f97316; }
+        .streak-badge.on-fire { background: rgba(239,68,68,0.15); color: #ef4444; }
+        .streak-badge.legendary { background: rgba(245,197,24,0.15); color: #f5c518; animation: pulse-glow 2s ease-in-out infinite; }
         .rules { display: flex; gap: 6px; margin-top: 8px; }
         .rule-tag { padding: 4px 10px; background: #1a1a1a; border-radius: 4px; font-size: 0.7rem; color: #888; font-weight: 500; }
         .qr-section { text-align: center; flex-shrink: 0; }
@@ -492,6 +505,26 @@
             if (king.win_streak > 0) {
                 winStreakEl.style.display = 'flex';
                 document.getElementById('winCount').textContent = king.win_streak;
+                // Streak flair tiers
+                const streak = king.win_streak;
+                winStreakEl.className = 'win-streak';
+                let streakEmoji = '🔥';
+                let streakLabel = 'wins';
+                if (streak >= 7) {
+                    winStreakEl.classList.add('legendary');
+                    streakEmoji = '👑';
+                    streakLabel = 'win streak — LEGENDARY';
+                } else if (streak >= 5) {
+                    winStreakEl.classList.add('on-fire');
+                    streakEmoji = '🔥';
+                    streakLabel = 'win streak — ON FIRE';
+                } else if (streak >= 3) {
+                    winStreakEl.classList.add('hot');
+                    streakEmoji = '🔥';
+                    streakLabel = 'win streak — heating up';
+                }
+                document.getElementById('winCount').textContent = `${streakEmoji} ${streak}`;
+                document.querySelector('.win-label').textContent = streakLabel;
             } else {
                 winStreakEl.style.display = 'none';
             }
@@ -746,10 +779,20 @@
       cornerTimer = setTimeout(() => { cornerTaps = 0; }, 2000);
     });
 
-    // Debug mode: ?debug in URL
-    if (window.location.search.includes('debug')) {
-      document.getElementById('debugPanel').classList.add('show');
-    }
+    // Debug mode: tap "Pool Cue" footer brand 5 times to toggle
+    let debugTaps = 0;
+    let debugTimer = null;
+    document.querySelector('.footer-brand').addEventListener('click', () => {
+      debugTaps++;
+      clearTimeout(debugTimer);
+      if (debugTaps >= 5) {
+        debugTaps = 0;
+        const panel = document.getElementById('debugPanel');
+        panel.classList.toggle('show');
+      }
+      debugTimer = setTimeout(() => { debugTaps = 0; }, 2000);
+    });
+
     let debugCounter = 0;
     async function debugAddPlayer() {
       debugCounter++;
