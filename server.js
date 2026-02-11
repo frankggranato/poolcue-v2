@@ -191,9 +191,9 @@ app.post('/api/join', async (req, res) => {
       return res.status(429).json({ error: 'too_many_requests' });
     }
 
-    // Sanitize: strip HTML tags, trim, limit length
-    const name = playerName.replace(/<[^>]*>/g, '').trim().substring(0, 24);
-    const partner = partnerName ? partnerName.replace(/<[^>]*>/g, '').trim().substring(0, 24) || null : null;
+    // Sanitize: strip HTML tags, zero-width chars, trim, limit length
+    const name = playerName.replace(/<[^>]*>/g, '').replace(/[\u200B-\u200F\u2028-\u202F\uFEFF]/g, '').trim().substring(0, 24);
+    const partner = partnerName ? partnerName.replace(/<[^>]*>/g, '').replace(/[\u200B-\u200F\u2028-\u202F\uFEFF]/g, '').trim().substring(0, 24) || null : null;
     if (!name) return res.status(400).json({ error: 'missing_fields' });
 
     // Auto-create session if needed
@@ -371,8 +371,8 @@ app.post('/api/partner', async (req, res) => {
     const phoneId = getPhoneId(req, res);
     const session = await db.getSession(tableCode);
     if (!session) return res.status(404).json({ error: 'no_session' });
-    // Sanitize: strip HTML tags, trim, limit length (same as /api/join)
-    const partner = partnerName ? partnerName.replace(/<[^>]*>/g, '').trim().substring(0, 24) || null : null;
+    // Sanitize: strip HTML tags, zero-width chars, trim, limit length (same as /api/join)
+    const partner = partnerName ? partnerName.replace(/<[^>]*>/g, '').replace(/[\u200B-\u200F\u2028-\u202F\uFEFF]/g, '').trim().substring(0, 24) || null : null;
     const entry = await db.updatePartnerName(session.id, phoneId, partner);
     if (!entry) return res.status(404).json({ error: 'not_in_queue' });
     await broadcastQueueUpdate(tableCode);

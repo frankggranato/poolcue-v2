@@ -165,12 +165,16 @@ async function closeSession(tableCode) {
   if (useMemory) {
     const s = mem.sessions.find(s => s.table_code === tableCode && s.status === 'active');
     if (s) s.status = 'closed';
-    // Clear queue entries for this session
-    mem.queue_entries = mem.queue_entries.filter(e => !s || e.session_id !== s.id);
+    // Clear queue entries and game log for this session
+    if (s) {
+      mem.queue_entries = mem.queue_entries.filter(e => e.session_id !== s.id);
+      mem.game_log = mem.game_log.filter(g => g.session_id !== s.id);
+    }
     return s;
   }
   const session = await getSession(tableCode);
   if (!session) return null;
+  await pool.query('DELETE FROM game_log WHERE session_id = $1', [session.id]);
   await pool.query('DELETE FROM queue_entries WHERE session_id = $1', [session.id]);
   await pool.query('UPDATE sessions SET status = $1 WHERE id = $2', ['closed', session.id]);
   return session;

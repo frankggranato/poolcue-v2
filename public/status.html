@@ -225,12 +225,12 @@
       <button class="btn btn-danger" onclick="leaveQueue()" style="font-size:0.95rem;">Leave Queue</button>
     </div>
 
-    <!-- Removed state -->
+    <!-- Not in queue state -->
     <div class="removed-msg hidden" id="removedMsg">
       <div class="icon">👋</div>
-      <h2>You've been removed</h2>
-      <p class="text-dim" style="margin:8px 0 20px;">Someone at the table removed you. Rejoin if you're still here!</p>
-      <a href="" id="rejoinLink" class="btn btn-accent" style="text-decoration:none;display:block;">Rejoin Queue</a>
+      <h2>You're not in the queue</h2>
+      <p class="text-dim" style="margin:8px 0 20px;">Join to get in line for the table!</p>
+      <a href="" id="rejoinLink" class="btn btn-accent" style="text-decoration:none;display:block;">Join Queue</a>
     </div>
   </div>
 
@@ -609,10 +609,11 @@ function esc(str) {
 // WebSocket
 function connectWS() {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  const ws = new WebSocket(`${proto}://${location.host}/ws?table=${TABLE_CODE}`);
+  const ws = new WebSocket(`${proto}://${location.host}/ws?table=${encodeURIComponent(TABLE_CODE)}`);
 
   ws.onmessage = (e) => {
-    const data = JSON.parse(e.data);
+    let data;
+    try { data = JSON.parse(e.data); } catch { return; }
     if (data.type === 'queue_update') {
       // Always re-fetch on queue update to get fresh my_entry position
       loadState();
