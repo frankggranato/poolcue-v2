@@ -230,70 +230,54 @@ async function compactPositions(sessionId) {
   const queue = await getQueue(sessionId);
   if (queue.length === 0) return;
 
-  // Sort everyone by current position
+  // Sort by current position — preserves join order
   const sorted = [...queue].sort((a, b) => a.position - b.position);
 
-  // King (pos 1) — first player, or existing king
+  // === STEP 1: Ensure king at position 1 ===
   let king = sorted.find(e => e.position === 1);
+  let newKing = false;
   if (!king) {
     king = sorted[0];
-    await setPosition(king.id, 1);
-    await resetConfirmationState(king.id);
+    newKing = true;
   }
+  await setPosition(king.id, 1);
+  if (newKing) await resetConfirmationState(king.id);
 
   const others = sorted.filter(e => e !== king);
+  if (others.length === 0) return;
 
-  // Find challenger: prioritize confirmed/ready players, skip ghosted
-  // PASS 1: Prefer confirmed or never-asked (clearly ready)
-  let challengerPicked = null;
-  for (const entry of others) {
-    if (isReadyToPlay(entry)) {
-      challengerPicked = entry;
-      break;
-    }
+  // === STEP 2: Find or keep challenger ===
+  // If someone is already at position 2, keep them (don't re-promote)
+  const existingChallenger = others.find(e => e.position === 2);
+
+  let challenger;
+  if (existingChallenger) {
+    // Challenger slot is filled — don't touch it
+    challenger = existingChallenger;
+  } else {
+    // Challenger slot is empty (game just ended, someone left, etc.)
+    // Walk in queue order. Only skip GHOSTED players.
+    // Everyone else (confirmed, never-asked, asked-but-not-timed-out)
+    // gets their turn in order. No line-jumping.
+    challenger = others.find(e => e.status !== 'ghosted');
+
+    // Fallback: if literally everyone is ghosted, take first anyway
+    // Table never sits empty.
+    if (!challenger) challenger = others[0];
+
+    // Clear confirmation state for newly promoted challenger
+    await resetConfirmationState(challenger.id);
   }
+  await setPosition(challenger.id, 2);
 
-  // PASS 2: If nobody "ready", pick first non-ghosted player
-  // The game must NEVER stall — someone always fills challenger
-  if (!challengerPicked && others.length > 0) {
-    for (const entry of others) {
-      if (entry.status !== 'ghosted') {
-        challengerPicked = entry;
-        break;
-      }
-    }
-  }
-
-  // PASS 3: If literally everyone is ghosted, pick first anyway
-  if (!challengerPicked && others.length > 0) {
-    challengerPicked = others[0];
-  }
-
-  // Build remaining list (preserving relative order)
-  const remaining = others.filter(e => e !== challengerPicked);
-
-  // Assign positions sequentially
-  let pos = 2;
-  if (challengerPicked) {
-    await setPosition(challengerPicked.id, pos);
-    // Reset confirmation state when promoted to challenger
-    await resetConfirmationState(challengerPicked.id);
-    pos = 3;
-  }
+  // === STEP 3: Renumber remaining positions 3, 4, 5... ===
+  // Relative order preserved — no reordering based on confirmation
+  const remaining = others.filter(e => e !== challenger);
+  let pos = 3;
   for (const entry of remaining) {
     await setPosition(entry.id, pos);
     pos++;
   }
-}
-
-// Is this player ready to fill the challenger slot?
-function isReadyToPlay(entry) {
-  // Confirmed = explicitly tapped "I'm here"
-  if (entry.status === 'confirmed') return true;
-  // Waiting and never been asked = they just joined, assume present
-  if (entry.status === 'waiting' && !entry.confirmation_sent_at) return true;
-  // Everything else (ghosted, asked-but-not-responded) = not ready
-  return false;
 }
 
 async function setPosition(entryId, position) {

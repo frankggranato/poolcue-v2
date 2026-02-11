@@ -266,8 +266,6 @@ app.post('/api/confirm', async (req, res) => {
     if (!session) return res.status(404).json({ error: 'no_session' });
     const result = await db.confirmPresence(session.id, phoneId);
     if (result.error) return res.status(400).json(result);
-    // Recompact — confirmed player may now qualify for challenger promotion
-    await db.compactPositions(session.id);
     await broadcastQueueUpdate(tableCode);
     res.json(result);
   } catch (err) {
