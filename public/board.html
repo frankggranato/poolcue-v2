@@ -94,8 +94,8 @@
         .main {
             flex: 1;
             display: block;
-            column-count: 3;
-            column-gap: 12px;
+            column-count: 2;
+            column-gap: 14px;
             column-fill: auto;
             overflow: hidden;
             height: 0;
@@ -103,7 +103,7 @@
             padding: 12px 16px;
         }
         .queue-label {
-            font-size: 0.65rem; font-weight: 600; color: #555;
+            font-size: 0.75rem; font-weight: 600; color: #555;
             text-transform: uppercase; letter-spacing: 1px;
             margin-bottom: 6px; column-span: all;
         }
@@ -113,17 +113,17 @@
             background: #1a1a1a;
             border: 1px solid rgba(239,68,68,0.3);
             border-radius: 5px;
-            padding: 6px 12px;
-            margin-bottom: 3px;
+            padding: 8px 12px;
+            margin-bottom: 4px;
             transition: all 0.15s;
             break-inside: avoid;
             animation: slideIn 0.3s ease-out;
         }
         .challenger-card .name-row { display: flex; align-items: center; gap: 8px; }
-        .challenger-card .pos { font-size: 0.75rem; color: #ef4444; min-width: 18px; font-weight: 500; }
-        .challenger-card .name { font-size: 0.85rem; font-weight: 600; color: #fff; }
-        .challenger-card .hint { font-size: 0.55rem; color: #444; margin-top: 2px; margin-left: 26px; }
-        .hint { font-size: 0.6rem; color: #444; }
+        .challenger-card .pos { font-size: 0.9rem; color: #ef4444; min-width: 20px; font-weight: 500; }
+        .challenger-card .name { font-size: 1rem; font-weight: 600; color: #fff; }
+        .challenger-card .hint { font-size: 0.65rem; color: #444; margin-top: 2px; margin-left: 28px; }
+        .hint { font-size: 0.7rem; color: #444; }
 
         /* Swipe states */
         .shot-caller-section.swiping { transition: none; }
@@ -134,11 +134,11 @@
 
         /* Queue Items */
         .queue-item {
-            display: flex; align-items: center; gap: 8px;
-            padding: 8px 10px;
+            display: flex; align-items: center; gap: 10px;
+            padding: 10px 12px;
             background: #141414;
             border-radius: 5px;
-            margin-bottom: 3px;
+            margin-bottom: 4px;
             break-inside: avoid;
             animation: slideIn 0.3s ease-out;
         }
@@ -146,9 +146,9 @@
             from { opacity: 0; transform: translateY(-8px); }
             to { opacity: 1; transform: translateY(0); }
         }
-        .queue-item .pos { font-size: 0.75rem; color: #444; min-width: 18px; font-weight: 500; }
-        .queue-item .name { font-size: 0.8rem; color: #aaa; flex: 1; }
-        .queue-item .confirm-status { font-size: 0.65rem; opacity: 0.9; padding: 2px 6px; border-radius: 4px; }
+        .queue-item .pos { font-size: 0.9rem; color: #444; min-width: 20px; font-weight: 500; }
+        .queue-item .name { font-size: 0.95rem; color: #aaa; flex: 1; }
+        .queue-item .confirm-status { font-size: 0.75rem; opacity: 0.9; padding: 2px 6px; border-radius: 4px; }
         .queue-item .confirm-status.confirmed { color: #22c55e; background: rgba(34,197,94,0.15); }
         .queue-item.needs-confirm { border-left: 2px solid #eab308; }
         .queue-item.needs-confirm .confirm-status { color: #eab308; background: rgba(234,179,8,0.15); }
@@ -556,6 +556,9 @@
         // Main content: challenger + queue
         const challenger = queue.find(e => e.position === 2);
         const waiting = queue.filter(e => e.position >= 3).sort((a, b) => a.position - b.position);
+        const MAX_DISPLAY = 20;
+        const displayWaiting = waiting.slice(0, MAX_DISPLAY);
+        const overflow = waiting.length - MAX_DISPLAY;
 
         let html = '';
 
@@ -582,8 +585,8 @@
             </div>`;
         }
 
-        // Queue items
-        for (const entry of waiting) {
+        // Queue items (capped at MAX_DISPLAY)
+        for (const entry of displayWaiting) {
             const isGhosted = entry.status === 'ghosted';
             const isMia = entry.status === 'mia';
             const needsConfirm = entry.confirmation_sent_at && entry.status === 'waiting';
@@ -608,6 +611,12 @@
                 <span class="pos">${entry.position}</span>
                 <span class="name">${esc(entry.player_name)}${partnerStr}</span>
                 ${confirmHtml}
+            </div>`;
+        }
+
+        if (overflow > 0) {
+            html += `<div class="queue-item" style="justify-content:center;color:#555;font-style:italic;">
+                +${overflow} more in queue
             </div>`;
         }
 
