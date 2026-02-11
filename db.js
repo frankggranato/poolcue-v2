@@ -233,48 +233,17 @@ async function compactPositions(sessionId) {
   // Sort by current position — preserves join order
   const sorted = [...queue].sort((a, b) => a.position - b.position);
 
-  // === PROMOTION PRIORITY ===
-  // When a slot opens, pick the best candidate in this order:
-  //   1. Likely here — confirmed OR not yet suspect (never asked / asked <2 min)
-  //      Queue order wins among these. Confirming doesn't let you skip the line,
-  //      it just proves you're present. Someone standing there who didn't check
-  //      their phone shouldn't get leapfrogged.
-  //   2. Probably AFK — asked 2+ min ago, no response. Yellow flag.
-  //   3. Ghosted — 3+ min unresponsive, probably gone (last resort)
-  // Within each tier, queue order (position) is preserved.
-  const now = Date.now();
-  const AFK_THRESHOLD = 120_000; // 2 minutes in ms
+  // === PURE FIFO PROMOTION ===
+  // Queue order is king. Confirmation is informational only (helps bartender
+  // see who's here). It never changes who gets promoted.
 
-  function pickBestCandidate(candidates) {
-    // Tier 1: Likely here — confirmed OR not suspect
-    // Confirmation doesn't jump the line; it protects you from being skipped.
-    const likelyHere = candidates.find(e =>
-      e.status === 'confirmed' ||
-      (e.status === 'waiting' && (
-        !e.confirmation_sent_at ||
-        (now - new Date(e.confirmation_sent_at).getTime()) < AFK_THRESHOLD
-      ))
-    );
-    if (likelyHere) return likelyHere;
-
-    // Tier 2: Probably AFK — asked 2+ min, still waiting
-    const probablyAfk = candidates.find(e =>
-      e.status === 'waiting' && e.confirmation_sent_at
-    );
-    if (probablyAfk) return probablyAfk;
-
-    // Tier 3: Everyone is ghosted — take first. Table never sits empty.
-    return candidates[0];
-  }
-
-  // === STEP 1: Ensure king at position 1 ===
+  // STEP 1: Ensure king at position 1
   let king = sorted.find(e => e.position === 1);
   let newKing = false;
   if (!king) {
-    // If there's an existing challenger, they auto-promote to king.
-    // They were already at the table — no need to evaluate tiers.
+    // Existing challenger auto-promotes, otherwise first in line
     const existingPos2 = sorted.find(e => e.position === 2);
-    king = existingPos2 || pickBestCandidate(sorted);
+    king = existingPos2 || sorted[0];
     newKing = true;
   }
   await setPosition(king.id, 1);
@@ -283,21 +252,18 @@ async function compactPositions(sessionId) {
   const others = sorted.filter(e => e !== king);
   if (others.length === 0) return;
 
-  // === STEP 2: Find or keep challenger ===
+  // STEP 2: Ensure challenger at position 2
   const existingChallenger = others.find(e => e.position === 2);
-
   let challenger;
   if (existingChallenger) {
     challenger = existingChallenger;
   } else {
-    challenger = pickBestCandidate(others);
+    challenger = others[0]; // Pure FIFO — next in line
     await resetConfirmationState(challenger.id);
   }
   await setPosition(challenger.id, 2);
 
-  // === STEP 3: Renumber remaining positions 3, 4, 5... ===
-  // Queue order preserved — confirmed players don't reorder among themselves.
-  // Their advantage is promotion to challenger/king, not queue position shuffling.
+  // STEP 3: Renumber remaining 3, 4, 5...
   const remaining = others.filter(e => e !== challenger);
   let pos = 3;
   for (const entry of remaining) {
@@ -666,20 +632,19 @@ async function removePlayer(sessionId, entryId) {
 }
 
 async function checkConfirmationTimeouts(sessionId) {
-  // Called every 30 seconds by server + on every queue-changing event
-  // Cascade confirmation system:
-  //   - Ask up to 4 people to confirm (not just pos 3-4)
-  //   - When someone ghosts, cascade to ask the next person
-  //   - Ghosted players stay visible but get skipped for promotion
-  //   - 3 min unresponsive → ghost, 2 more min → remove (5 min total)
+  // === SIMPLIFIED CONFIRMATION SYSTEM ===
+  // Pure FIFO queue. Confirmation is INFORMATIONAL ONLY — helps bartender
+  // see who's here. Never changes queue order. No auto-removal.
+  //   - Pos 3-5 get asked to confirm
+  //   - 3 min no response → ghosted (yellow flag for bartender)
+  //   - Bartender manually swipes AFK players if needed (undo available)
   const queue = await getQueue(sessionId);
   const now = Date.now();
   const actions = [];
 
-  // STEP 1: Reset confirmation state for anyone at pos 1-3
-  // Pos 3 is "on deck" — no confirmation needed, clear any leftover state from pos 4
+  // STEP 1: Reset confirmation state for pos 1-2 (at the table, irrelevant)
   for (const entry of queue) {
-    if (entry.position <= 3 && (entry.status === 'confirmed' || entry.status === 'ghosted' || entry.confirmation_sent_at)) {
+    if (entry.position <= 2 && (entry.status === 'confirmed' || entry.status === 'ghosted' || entry.confirmation_sent_at)) {
       if (useMemory) {
         entry.status = 'waiting';
         entry.confirmation_sent_at = null;
@@ -694,47 +659,25 @@ async function checkConfirmationTimeouts(sessionId) {
     }
   }
 
-  // STEP 2: Check timeouts for pos 4+ who have been asked
-  // Position 3 is "on deck" — they're watching the game, never bothered
+  // STEP 2: Ghost check for pos 3+ who were asked but didn't respond (3 min)
+  // No auto-removal — bartender decides
   for (const entry of queue) {
-    if (entry.position < 4) continue;
-    if (entry.status === 'confirmed') continue;
+    if (entry.position < 3) continue;
+    if (entry.status === 'confirmed' || entry.status === 'ghosted') continue;
     if (!entry.confirmation_sent_at) continue;
 
     const elapsed = (now - new Date(entry.confirmation_sent_at).getTime()) / 1000;
-
-    if (entry.status === 'ghosted') {
-      // Already ghosted — check for full removal (2 min after ghost = 5 min total)
-      const ghostElapsed = (now - new Date(entry.ghosted_at).getTime()) / 1000;
-      if (ghostElapsed >= 120) {
-        await removePlayer(sessionId, entry.id);
-        actions.push({ action: 'removed', name: entry.player_name, id: entry.id });
-      }
-    } else if (elapsed >= 180) {
-      // 3 min — ghost them
+    if (elapsed >= 180) {
       await ghostPlayer(sessionId, entry.id);
       actions.push({ action: 'ghosted', name: entry.player_name, id: entry.id });
     }
   }
 
-  // STEP 3: Cascade confirmations — only ask pos 4+ (pos 3 is "on deck", immune)
-  const pendingQueue = queue.filter(e =>
-    e.position >= 4 && e.status === 'waiting' && !e.confirmation_sent_at
+  // STEP 3: Ask positions 3-5 to confirm (if not already asked)
+  const toAsk = queue.filter(e =>
+    e.position >= 3 && e.position <= 5
+    && e.status === 'waiting' && !e.confirmation_sent_at
   ).sort((a, b) => a.position - b.position);
-
-  const activelyAsked = queue.filter(e =>
-    e.position >= 4 && e.confirmation_sent_at
-    && !['confirmed', 'eliminated', 'removed'].includes(e.status)
-    && e.status !== 'ghosted'
-  ).length;
-
-  const confirmed = queue.filter(e =>
-    e.position >= 4 && e.status === 'confirmed'
-  ).length;
-
-  // Keep 2 people asked/confirmed at positions 4-5
-  const slotsToFill = Math.max(0, 2 - activelyAsked - confirmed);
-  const toAsk = pendingQueue.slice(0, slotsToFill);
 
   for (const entry of toAsk) {
     await sendConfirmation(sessionId, entry.id);
@@ -745,11 +688,6 @@ async function checkConfirmationTimeouts(sessionId) {
       phone_id: entry.phone_id,
       position: entry.position
     });
-  }
-
-  // STEP 4: If any removals happened, recompact positions
-  if (actions.some(a => a.action === 'removed')) {
-    await compactPositions(sessionId);
   }
 
   return actions;
@@ -843,5 +781,11 @@ module.exports = {
   checkConfirmationTimeouts,
   updatePartnerName,
   ensureSession,
-  clearStaleQueue
+  clearStaleQueue,
+  _resetMemory() {
+    mem.sessions = [];
+    mem.queue_entries = [];
+    mem.game_log = [];
+    mem._idCounters = { sessions: 0, queue_entries: 0, game_log: 0 };
+  }
 };
