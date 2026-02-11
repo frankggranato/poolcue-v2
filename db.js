@@ -731,8 +731,8 @@ async function checkConfirmationTimeouts(sessionId) {
     e.position >= 3 && e.status === 'confirmed'
   ).length;
 
-  // We want at least 4 people who have been asked OR confirmed
-  const slotsToFill = Math.max(0, 4 - activelyAsked - confirmed);
+  // We want at least 2 people who have been asked OR confirmed (positions 3-4 only)
+  const slotsToFill = Math.max(0, 2 - activelyAsked - confirmed);
   const toAsk = pendingQueue.slice(0, slotsToFill);
 
   for (const entry of toAsk) {
