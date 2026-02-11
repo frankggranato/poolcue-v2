@@ -247,7 +247,7 @@ app.post('/api/result', async (req, res) => {
     const outcome = await db.recordResult(session.id, result);
     if (outcome.error) return res.status(400).json(outcome);
 
-    // Trigger confirmation check for new position 3-4
+    // Trigger confirmations for newly promoted players
     await triggerConfirmations(tableCode);
     await broadcastQueueUpdate(tableCode);
     res.json(outcome);
@@ -427,7 +427,7 @@ app.get('/qr/:tableCode', async (req, res) => {
 async function triggerConfirmations(tableCode) {
   // Delegates to checkConfirmationTimeouts which handles:
   // 1. Reset stale confirmation state for pos 1-2
-  // 2. Send new confirmations to pos 3-4
+  // 2. Send new confirmations to next players in line
   // 3. Ghost/remove unresponsive players
   // Returns true if any state changed (caller should broadcast)
   const session = await db.getSession(tableCode);

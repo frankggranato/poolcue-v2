@@ -5,7 +5,7 @@
 
 ## WHAT THIS IS
 
-Digital pool queue system for bars. Touchscreen board sits by the table, players join from their phones via QR code. Real-time WebSocket updates. Confirmation system for "are you still here?" when you're next up. Shot caller (king of the table) controls game type and reports wins/losses.
+Digital pool queue system for bars. Touchscreen board sits by the table, players join from their phones via QR code. Real-time WebSocket updates. Confirmation system proves you're still at the bar. Shot caller (king of the table) controls game type and reports wins/losses via swipe.
 
 **Built for:** Beta testing at a real bar
 **Stack:** Node.js + Express + WebSocket + PostgreSQL (Render)
@@ -16,12 +16,12 @@ Digital pool queue system for bars. Touchscreen board sits by the table, players
 
 ---
 
-## DEPLOYMENT (LIVE ON RENDER)
+## DEPLOYMENT
 
 - Render service: pool_cue (srv-d6502a7pm1nc738njrcg), Oregon region, free tier
 - Database: PostgreSQL 18 (dpg-d650ot94tr6s738sr0qg-a)
 - Auto-deploy on push to main branch
-- Environment vars: DATABASE_URL, BASE_URL (https://pool-cue.onrender.com), SESSION_PIN, NODE_ENV=production
+- Environment vars: DATABASE_URL, BASE_URL, SESSION_PIN, NODE_ENV
 
 ---
 
@@ -30,44 +30,57 @@ Digital pool queue system for bars. Touchscreen board sits by the table, players
 ```
 PoolCue-v2/
 ├── server.js           — Express + WebSocket server, all API routes
-├── db.js               — Database layer, Postgres + in-memory fallback
-├── nicknames.js        — Pool pun name generator for random names
+├── db.js               — Database layer (Postgres + in-memory fallback)
+├── nicknames.js        — Pool pun name generator
 ├── package.json
-├── .env                — Environment config
+├── .env                — Local environment config
+├── .env.example        — Template for env vars
+├── .gitignore
+├── kiosk-setup.bat     — Windows kiosk auto-start script
+├── BUILD_PLAN.md       — Original build phases (historical)
+├── PROJECT_REFERENCE.md — This file
 ├── public/
 │   ├── board.html      — Touchscreen board display (wood frame aesthetic)
 │   ├── status.html     — Player phone: position, confirm, shot caller controls
 │   ├── join.html       — Player phone: join queue, see preview
 │   ├── setup.html      — Bartender: PIN-gated session management
-│   ├── kiosk.html      — One-tap kiosk setup page for stick PC
-│   ├── kiosk-setup.bat — Legacy Windows kiosk script
+│   ├── kiosk.html      — One-tap kiosk launcher for stick PC
 │   ├── style.css       — Shared phone page styles (yellow/black)
 │   └── favicon.svg     — 8-ball icon
-└── transcripts/        — Archived session transcripts
+└── transcripts/        — Archived dev session transcripts
 ```
 
 ---
 
-## DESIGN SYSTEM
+## QUEUE LOGIC (core algorithm)
 
-- **Board (board.html):** Black background, wood frame border, minimal dark aesthetic. 3-column CSS layout for queue. Shot caller name big at top left, QR code top right. Swipe-to-remove on king and challenger. Footer with "Pool Cue" branding, Undo button (left), Fullscreen button (right).
-- **Phone pages:** Yellow (#f5c518) and black. Inter font. Cards, rounded inputs, toast notifications.
-- **Welcome screen:** "Got Next?" + large QR (180x180) + pulsing gold CTA. Shows when no session active.
-- **Empty queue state:** "First Up?" + QR code. Shows when session active but nobody signed up.
-- **No emojis in queue names** — XSS-safe via `esc()` function on all user input display.
+### Position model
+- Position 1 = **King** (shot caller, on the table)
+- Position 2 = **Challenger** (playing next)
+- Position 3+ = **Queue** (waiting, may be asked to confirm)
 
----
+### Fair promotion (`compactPositions` in db.js)
+When a game ends or someone leaves, positions compact:
 
-## KEY ARCHITECTURE DECISIONS
+1. **King (pos 1):** If empty, first person in queue becomes king.
+2. **Challenger (pos 2):** If someone already there, keep them. If empty, walk the queue in strict order — skip only `status === 'ghosted'` players. First non-ghosted person gets promoted. Fallback: if everyone is ghosted, promote first anyway (table never sits empty).
+3. **Remaining:** Renumber sequentially (3, 4, 5...) preserving relative order.
 
-1. **Cookie-based phone ID** (not accounts) — `poolcue_phone` UUID cookie, 1 year expiry, httpOnly. One entry per device.
-2. **No SMS** — v1 used Twilio. v2 does in-app confirmation via WebSocket push + phone tap.
-3. **Position-based queue** — Integer positions, shift up/down on join/leave/result. Positions 1=king, 2=challenger, 3-4=on deck (get confirmation requests).
-4. **Confirmation system:** Pos 3-4 get asked "are you here?" → 3 min to confirm → ghosted → 2 more min → removed. Checked every 30 seconds + on every queue-changing event.
-5. **In-memory fallback** — No Postgres needed for local dev. `useMemory` flag in db.js, parallel code paths.
-6. **Single broadcast model** — Every queue change triggers `broadcastQueueUpdate(tableCode)` which sends full queue state to all connected clients.
-7. **Swipe-only game results** — No buttons on phone. Swipe king or challenger on the board to record wins/losses.
-8. **Board undo without PIN** — Board sends `source: 'board'` to skip PIN check (it's physically at the table). Setup page still requires PIN.
+**Key properties:**
+- Queue order is sacred — first come, first served, never reordered
+- Ghosted players keep their spot but get skipped for promotion
+- If a ghosted player confirms (un-ghosts), they resume at their position
+- No line-jumping — confirming faster doesn't move you ahead
+- Table never sits empty (fallback to first person if all ghosted)
+
+### Confirmation cascade
+`checkConfirmationTimeouts` keeps up to 4 people in the "asked or confirmed" pipeline:
+
+1. **Reset** pos 1-2 confirmation state (they're already playing)
+2. **Timeout check** for pos 3+: 3 min no response → ghosted, 2 more min → removed
+3. **Cascade** — always ask enough people to keep 4 slots filled (asked + confirmed)
+
+Called every 30 seconds + on every queue-changing event (join, leave, result, undo, remove).
 
 ---
 
@@ -78,142 +91,73 @@ PoolCue-v2/
 | GET | `/api/queue/:tableCode` | None | Full queue state + my_entry |
 | POST | `/api/join` | Rate limit (10/min) | Join queue |
 | POST | `/api/leave` | Cookie phone ID | Leave queue |
-| POST | `/api/result` | Rate limit (6/min) | Record game result |
+| POST | `/api/result` | Rate limit (6/min) | Record game result (swipe) |
 | POST | `/api/confirm` | Cookie phone ID | Confirm presence |
-| POST | `/api/undo` | PIN or source=board | Undo last elimination |
-| POST | `/api/rules` | Shot caller only (pos 1) | Change game type/rules |
+| POST | `/api/undo` | PIN or source=board | Undo last elimination (60s window) |
+| POST | `/api/rules` | Shot caller (pos 1) | Change game type / rules |
 | POST | `/api/remove` | PIN required | Bartender removes player |
 | POST | `/api/partner` | Cookie phone ID | Update partner name |
 | POST | `/api/session/start` | PIN required | Start new session |
-| POST | `/api/session/close` | PIN required | Close session |
-| POST | `/api/debug/add-fake` | None | Add fake player for testing |
+| POST | `/api/session/close` | PIN required | Close session, clear queue |
+| POST | `/api/debug/add-fake` | None | Add fake player (testing) |
 | GET | `/api/suggest-name` | None | Random pool nickname |
 | GET | `/qr/:tableCode` | None | QR code PNG |
 
 ---
 
-## BOARD FEATURES
+## DESIGN
 
-### Welcome / Empty States
-- **No session:** "Got Next?" splash with large QR code, pulsing CTA
-- **Session active, empty queue:** "First Up?" with QR code, same inviting style
-- **Session active, players:** Full board with queue
+- **Board:** Black background, wood frame border, 3-column CSS layout. Shot caller name big top-left, QR code top-right. Swipe-to-remove on king/challenger.
+- **Phone pages:** Yellow (#f5c518) / black. Inter font. Cards, rounded inputs, toast notifications.
+- **Welcome screen:** "Got Next?" + large QR + pulsing gold CTA (no session active).
+- **Empty queue:** "First Up?" + QR code (session active, nobody joined).
 
-### Win Streak Flair (shot caller display)
-- 1-2 wins: standard gold counter
-- 3-4 wins: 🔥 orange, "heating up"
-- 5-6 wins: 🔥 red glow + text-shadow, "ON FIRE"
-- 7+ wins: 👑 gold pulse animation, "LEGENDARY"
-
-### Animations
-- Queue items: slideIn animation (0.3s ease-out) on render
-- Shot caller name: flash animation when king changes
-- Challenger cards: slideIn on render
-
-### Kiosk Mode
-- `/board/table1?kiosk` — shows "Tap anywhere to start" overlay, goes fullscreen on tap
-- `/kiosk.html` — setup page with one big "Start Board" button
-- Fullscreen button in footer (⛶ Fullscreen / ✕ Exit)
-- Hidden exit: tap top-left corner 5x within 2 seconds
-
-### Debug Panel (hidden)
-- Tap "Pool Cue" footer text 5x to toggle
-- Buttons: + Player, + 3 Players, King Wins, Challenger Wins, Reset Queue
-- Uses `/api/debug/add-fake` endpoint with random nicknames
-- For testing/demo only — invisible unless you know the tap trick
+### Win streak flair
+- 1–2 wins: gold counter
+- 3–4: 🔥 orange, "heating up"
+- 5–6: 🔥 red glow, "ON FIRE"
+- 7+: 👑 gold pulse, "LEGENDARY"
 
 ---
 
-## PHONE FEATURES
+## SECURITY
 
-### Join Page (join.html)
-- Name input with random nickname suggestion
-- Partner name field (shown in doubles mode)
-- Queue preview showing current players
-- Auto-creates session if none exists
-
-### Status Page (status.html)
-- Position display with role label (Shot Caller / Challenger / In Queue)
-- Estimated wait time
-- Confirmation button (green pulse → red urgent when ghosted)
-- Ghost countdown timer
-- Game Type toggle (Singles/Doubles) — shot caller only
-- Rules toggle (Bar Rules/APA/BCA) — shot caller only
-- Leave Queue button
-- **Position change alerts:** vibration + toast when becoming:
-  - #3: single buzz, "Almost up"
-  - #2 (Challenger): triple buzz, "You're up next — get to the table!"
-  - #1 (Shot Caller): double buzz, "You're the Shot Caller!"
-
----
-
-## CONFIRMATION SYSTEM
-
-`db.checkConfirmationTimeouts(sessionId)` runs 3 steps:
-1. **RESET** — Anyone at pos 1-2 who has confirmation state gets cleaned
-2. **SEND** — Pos 3-4 with no `confirmation_sent_at` get marked for confirmation
-3. **TIMEOUT** — 3 min → ghost, 2 more min → remove (5 min total)
-
-Called from: `/api/result`, `/api/join`, `/api/leave`, `/api/undo`, `/api/remove`, and every 30 seconds via `setInterval`.
+- **XSS:** `esc()` on all client-side display. Server strips HTML tags on join. 24-char name limit.
+- **Rate limiting:** 10 joins/min per device, 6 results/min per table.
+- **PIN auth:** session start/close, remove player, phone undo.
+- **Board undo without PIN:** sends `source: 'board'` (physically at the table).
+- **Shot caller auth:** `/api/rules` verifies phone_id matches position 1.
+- **Cookie-based phone ID:** `poolcue_phone` UUID, 1-year expiry, httpOnly. One entry per device.
 
 ---
 
 ## UNDO SYSTEM
 
 - 60-second window after elimination
-- Detects result type: `entry.position === 1` = king lost, `entry.position === 2` = challenger lost
-- King-wins undo: Restore challenger to pos 2, decrement king's streak
-- Challenger-wins undo: Swap back — former king to pos 1 with streak intact, former challenger to pos 2 with streak 0
-- Deletes game_log entry
-- Board can undo without PIN (physically at table)
+- Detects result type by eliminated player's position (1 = king lost, 2 = challenger lost)
+- King-wins undo: restore challenger to pos 2, decrement king streak
+- Challenger-wins undo: former king back to pos 1, former challenger back to pos 2 with streak 0
+- Deletes corresponding game_log entry
 
 ---
 
-## SECURITY
+## HARDWARE
 
-- **XSS:** `esc()` function on all pages. Server strips HTML tags on join.
-- **Rate limiting:** 10 joins/min per device, 6 results/min per table
-- **PIN auth:** session start/close, remove player. Setup page requires PIN for undo.
-- **Shot caller auth:** `/api/rules` checks phone_id matches position 1
-- **Name limits:** 24 chars max, HTML stripped
+- **D5 Stick PC** — Windows compute stick, HDMI into monitor
+- **CF15T** — 15" FHD (1920×1080) touchscreen, USB-C power
+- **Kiosk flow:** Chrome → pool-cue.onrender.com/kiosk.html → Start Board → fullscreen
+- **Exit:** Tap top-left corner 5× within 2s, or ✕ Exit in footer
 
----
-
-## HARDWARE SETUP
-
-- **D5 Stick PC** — Windows compute stick, plugs into monitor HDMI
-- **CF15T** — 15" FHD (1920x1080) touchscreen, USB-C power
-- **Kiosk flow:** Open Chrome → go to pool-cue.onrender.com/kiosk.html → tap Start Board → tap screen to go fullscreen
-- **Exit:** Tap top-left corner 5x, or tap ✕ Exit in footer
-
----
-
-## COMPLETE BUG FIX HISTORY
-
-### Sessions 1-6 (Feb 10, 2026)
-- Full build from spec to deployment
-- Board redesign to centered wood frame
-- XSS protection, rate limiting, leave queue
-- Confirmation system overhaul (5 interconnected bugs)
-- Full audit (8 bugs found, all resolved)
-- Critical undo bug: challenger-wins left king at pos 2 — complete rewrite
-- Deployed to Render with PostgreSQL
-
-### Session 7 (Feb 10-11, 2026)
-- Welcome splash screen replacing dead "Table Closed" state
-- Removed I Won/They Won phone buttons (swipe-only)
-- Kiosk mode: fullscreen overlay, exit mechanism, setup page
-- Polish: touchscreen undo (no PIN), phone alerts, animations, favicon, footer branding
-- Win streak flair (3 tiers)
-- Debug panel (hidden behind footer 5-tap)
+### Debug panel (hidden)
+Tap "Pool Cue" footer text 5× to toggle. Buttons: + Player, + 3 Players, King Wins, Challenger Wins, Reset Queue.
 
 ---
 
 ## WHAT'S NOT BUILT YET
 
-- Multiple tables per venue (code supports it, no UI to browse)
-- Stats at end of night ("23 games, longest streak: Side Pocket x7")
-- Bartender admin view (simpler than setup.html)
+- Multiple tables per venue (code supports it, no browse UI)
+- End-of-night stats ("23 games, longest streak: Side Pocket ×7")
+- Bartender admin view
 - Player accounts / lifetime stats / leaderboards
 - Push notifications (PWA)
 - Tournament mode

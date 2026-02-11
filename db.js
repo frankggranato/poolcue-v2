@@ -558,15 +558,9 @@ async function confirmPresence(sessionId, phoneId) {
     );
     if (!entry) return { error: 'not_in_queue' };
 
-    // If ghosted, recover them — slide back to their original spot
-    if (entry.status === 'ghosted') {
-      entry.status = 'confirmed';
-      entry.confirmed_at = new Date();
-      entry.ghosted_at = null;
-    } else {
-      entry.status = 'confirmed';
-      entry.confirmed_at = new Date();
-    }
+    entry.status = 'confirmed';
+    entry.confirmed_at = new Date();
+    entry.ghosted_at = null;
     return { success: true, name: entry.player_name, position: entry.position };
   }
 
@@ -662,7 +656,7 @@ async function checkConfirmationTimeouts(sessionId) {
     }
   }
 
-  // STEP 2: Check timeouts for ALL pos 3+ who have been asked
+  // STEP 2: Check timeouts for pos 3+ who have been asked
   for (const entry of queue) {
     if (entry.position < 3) continue;
     if (entry.status === 'confirmed') continue;
@@ -723,21 +717,6 @@ async function checkConfirmationTimeouts(sessionId) {
   return actions;
 }
 
-async function getEntryByPhone(sessionId, phoneId) {
-  if (useMemory) {
-    return mem.queue_entries.find(e =>
-      e.session_id === sessionId && e.phone_id === phoneId
-      && !['eliminated', 'removed'].includes(e.status)
-    ) || null;
-  }
-  const res = await pool.query(
-    `SELECT * FROM queue_entries WHERE session_id = $1 AND phone_id = $2
-     AND status NOT IN ('eliminated', 'removed') LIMIT 1`,
-    [sessionId, phoneId]
-  );
-  return res.rows[0] || null;
-}
-
 async function updatePartnerName(sessionId, phoneId, partnerName) {
   if (useMemory) {
     const entry = mem.queue_entries.find(e =>
@@ -787,7 +766,6 @@ module.exports = {
   removePlayer,
   checkConfirmationTimeouts,
   compactPositions,
-  getEntryByPhone,
   updatePartnerName,
   ensureSession
 };
