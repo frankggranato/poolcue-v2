@@ -317,14 +317,15 @@ await test('Ghosted after 3 min — stays in queue', async () => {
   console.log(`  T${testNum} ✓ C ghosted but still in line`);
 });
 
-await test('Ghosted 20 min — STILL in queue (no auto-remove)', async () => {
+await test('Auto-removed after 5 min total (3 min ghost + 2 min)', async () => {
   const sid = await setup(5);
   await db.checkConfirmationTimeouts(sid);
-  await fakeGhosted(sid, 'C', 20); // ghosted 20 min ago
+  await fakeGhosted(sid, 'C', 3); // ghosted 3 min ago (well past 2 min removal threshold)
   await db.checkConfirmationTimeouts(sid);
   const q = await getQ(sid);
-  assert(!!q.find(e => e.player_name === 'C'), 'C still there');
-  console.log(`  T${testNum} ✓ No auto-removal even after 20 min`);
+  assert(!q.find(e => e.player_name === 'C'), 'C auto-removed');
+  assert(q.length === 4, '4 remain');
+  console.log(`  T${testNum} ✓ C auto-removed, queue runs itself`);
 });
 
 await test('Confirmed player promoted — state cleared', async () => {
@@ -372,15 +373,15 @@ await test('Confirmed #5 does NOT skip unconfirmed #3', async () => {
   console.log(`  T${testNum} ✓ FIFO preserved — no line-cutting`);
 });
 
-await test('Ghosted #3 still promoted (bartender decides removal)', async () => {
+await test('Ghosted #3 still promoted in FIFO order', async () => {
   const sid = await setup(6);
   await db.checkConfirmationTimeouts(sid);
-  await fakeGhosted(sid, 'C', 5);
+  await fakeGhosted(sid, 'C', 1); // fresh ghost, not yet auto-removed
   await db.confirmPresence(sid, 'phone_D');
   await db.recordResult(sid, 'king-wins');
   const q = await getQ(sid);
   assert(q[1].player_name === 'C', 'C (ghosted) promoted — FIFO');
-  console.log(`  T${testNum} ✓ Ghosted player promoted, bartender swipes if truly gone`);
+  console.log(`  T${testNum} ✓ Ghosted player promoted, system or bartender removes if truly gone`);
 });
 
 await test('Bartender swipes ghosted → next up correctly', async () => {
@@ -697,13 +698,13 @@ await test('Record result, undo, record result, undo, record result', async () =
   console.log(`  T${testNum} ✓ Multiple undo cycles: ${names(q)}`);
 });
 
-await test('All positions 3-5 ghosted, game ends', async () => {
+await test('All positions 3-5 ghosted, game ends — FIFO still promotes them', async () => {
   const sid = await setup(7);
   await db.checkConfirmationTimeouts(sid);
-  await fakeGhosted(sid, 'C', 5);
-  await fakeGhosted(sid, 'D', 5);
-  await fakeGhosted(sid, 'E', 5);
-  await db.checkConfirmationTimeouts(sid);
+  // Fresh ghosts (1 min) — not yet eligible for auto-removal
+  await fakeGhosted(sid, 'C', 1);
+  await fakeGhosted(sid, 'D', 1);
+  await fakeGhosted(sid, 'E', 1);
   
   await db.recordResult(sid, 'king-wins'); // B out
   const q = await getQ(sid);

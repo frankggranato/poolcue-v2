@@ -634,10 +634,11 @@ async function removePlayer(sessionId, entryId) {
 async function checkConfirmationTimeouts(sessionId) {
   // === SIMPLIFIED CONFIRMATION SYSTEM ===
   // Pure FIFO queue. Confirmation is INFORMATIONAL ONLY — helps bartender
-  // see who's here. Never changes queue order. No auto-removal.
+  // see who's here. Never changes queue order.
   //   - Pos 3-5 get asked to confirm
-  //   - 3 min no response → ghosted (yellow flag for bartender)
-  //   - Bartender manually swipes AFK players if needed (undo available)
+  //   - 3 min no response → ghosted (yellow flag)
+  //   - 5 min total → auto-removed (queue runs itself, bartender doesn't need to babysit)
+  //   - Bartender CAN manually swipe sooner if they want (undo available)
   const queue = await getQueue(sessionId);
   const now = Date.now();
   const actions = [];
@@ -659,15 +660,23 @@ async function checkConfirmationTimeouts(sessionId) {
     }
   }
 
-  // STEP 2: Ghost check for pos 3+ who were asked but didn't respond (3 min)
-  // No auto-removal — bartender decides
+  // STEP 2: Timeout checks for pos 3+ who were asked
   for (const entry of queue) {
     if (entry.position < 3) continue;
-    if (entry.status === 'confirmed' || entry.status === 'ghosted') continue;
+    if (entry.status === 'confirmed') continue;
     if (!entry.confirmation_sent_at) continue;
 
     const elapsed = (now - new Date(entry.confirmation_sent_at).getTime()) / 1000;
-    if (elapsed >= 180) {
+
+    if (entry.status === 'ghosted') {
+      // Already ghosted — auto-remove after 2 more min (5 min total)
+      const ghostElapsed = (now - new Date(entry.ghosted_at).getTime()) / 1000;
+      if (ghostElapsed >= 120) {
+        await removePlayer(sessionId, entry.id);
+        actions.push({ action: 'removed', name: entry.player_name, id: entry.id });
+      }
+    } else if (elapsed >= 180) {
+      // 3 min no response → ghost
       await ghostPlayer(sessionId, entry.id);
       actions.push({ action: 'ghosted', name: entry.player_name, id: entry.id });
     }
@@ -688,6 +697,11 @@ async function checkConfirmationTimeouts(sessionId) {
       phone_id: entry.phone_id,
       position: entry.position
     });
+  }
+
+  // STEP 4: If any removals happened, recompact positions
+  if (actions.some(a => a.action === 'removed')) {
+    await compactPositions(sessionId);
   }
 
   return actions;
