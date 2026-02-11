@@ -116,7 +116,8 @@ function getPhoneId(req, res) {
     res.cookie('poolcue_phone', phoneId, {
       maxAge: 365 * 24 * 60 * 60 * 1000, // 1 year
       httpOnly: true,
-      sameSite: 'lax'
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production'
     });
   }
   return phoneId;
@@ -370,7 +371,9 @@ app.post('/api/partner', async (req, res) => {
     const phoneId = getPhoneId(req, res);
     const session = await db.getSession(tableCode);
     if (!session) return res.status(404).json({ error: 'no_session' });
-    const entry = await db.updatePartnerName(session.id, phoneId, partnerName);
+    // Sanitize: strip HTML tags, trim, limit length (same as /api/join)
+    const partner = partnerName ? partnerName.replace(/<[^>]*>/g, '').trim().substring(0, 24) || null : null;
+    const entry = await db.updatePartnerName(session.id, phoneId, partner);
     if (!entry) return res.status(404).json({ error: 'not_in_queue' });
     await broadcastQueueUpdate(tableCode);
     res.json({ success: true });
@@ -385,8 +388,11 @@ app.get('/api/suggest-name', (req, res) => {
   res.json({ name: nicknames.suggest() });
 });
 
-// Debug: add a fake player (for testing queue flow)
+// Debug: add a fake player (for testing queue flow — disabled in production)
 app.post('/api/debug/add-fake', async (req, res) => {
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(403).json({ error: 'debug_disabled' });
+  }
   try {
     const { tableCode } = req.body;
     const session = await db.ensureSession(tableCode);

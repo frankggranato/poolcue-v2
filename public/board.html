@@ -132,8 +132,6 @@
         .challenger-card.swiping { cursor: grabbing; }
         .challenger-card.swipe-left, .challenger-card.swipe-right { background: rgba(239,68,68,0.2); border-color: rgba(239,68,68,0.4); }
 
-        .empty-slot { padding: 14px 16px; color: #333; font-size: 0.9rem; }
-
         /* Queue Items */
         .queue-item {
             display: flex; align-items: center; gap: 8px;
@@ -304,7 +302,7 @@
                         <span class="win-count" id="winCount">0</span>
                         <span class="win-label">wins</span>
                     </div>
-                    <div class="hint" id="kingHint" style="display:none;">← swipe off if lost →</div>
+                    <div class="hint" id="kingHint" style="display:none;">← swipe if lost →</div>
                     <div class="rules" id="rulesDisplay">
                         <span class="rule-tag" id="tagGameType">Singles</span>
                         <span class="rule-tag" id="tagRuleType">Bar Rules</span>
@@ -535,7 +533,7 @@
             } else {
                 winStreakEl.style.display = 'none';
             }
-            kingHintEl.style.display = 'block';
+            kingHintEl.style.display = queue.some(e => e.position === 2) ? 'block' : 'none';
         } else {
             kingNameEl.textContent = 'Table Open';
             kingNameEl.className = 'shot-caller-name empty';
