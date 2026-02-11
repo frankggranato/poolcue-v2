@@ -188,7 +188,7 @@
       <div class="wait-estimate" id="waitEstimate"></div>
     </div>
 
-    <!-- Confirm section (positions 3-4) -->
+    <!-- Confirm section (positions 2+) -->
     <div class="confirm-section hidden" id="confirmSection">
       <button class="confirm-big active" id="confirmBtn" onclick="confirmPresence()">✋ TAP TO CONFIRM</button>
     </div>
@@ -242,7 +242,6 @@ let myEntry = null;
 let queue = [];
 let session = null;
 let avgGameSeconds = null;
-let ghostInterval = null;
 let lastStateHash = '';
 let lastQueueHtml = '';
 let lastPosition = null;
@@ -443,7 +442,6 @@ function render() {
       confirmBtn.className = 'confirm-big confirmed';
       confirmBtn.disabled = true;
       ghostWarning.classList.add('hidden');
-      stopGhostTimer();
       lastConfirmState = 'confirmed';
     } else if (myEntry.status === 'ghosted') {
       confirmSection.classList.remove('hidden');
@@ -451,7 +449,6 @@ function render() {
       confirmBtn.className = 'confirm-big ghosted';
       confirmBtn.disabled = false;
       ghostWarning.classList.remove('hidden');
-      startGhostTimer();
       // Alert on ghost transition
       if (lastConfirmState !== 'ghosted') {
         if (navigator.vibrate) navigator.vibrate([400, 100, 400, 100, 400]);
@@ -465,7 +462,6 @@ function render() {
       confirmBtn.className = 'confirm-big mia';
       confirmBtn.disabled = false;
       ghostWarning.classList.add('hidden');
-      stopGhostTimer();
       // Alert on MIA transition
       if (lastConfirmState !== 'mia') {
         if (navigator.vibrate) navigator.vibrate([300, 100, 300]);
@@ -480,7 +476,6 @@ function render() {
       confirmBtn.className = 'confirm-big active';
       confirmBtn.disabled = false;
       ghostWarning.classList.add('hidden');
-      stopGhostTimer();
       // Alert on first confirmation request
       if (lastConfirmState !== 'asked') {
         if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
@@ -492,7 +487,6 @@ function render() {
   } else {
     confirmSection.classList.add('hidden');
     ghostWarning.classList.add('hidden');
-    stopGhostTimer();
     lastConfirmState = null;
   }
 
@@ -544,15 +538,6 @@ function renderQueue() {
     list.innerHTML = html;
     lastQueueHtml = html;
   }
-}
-
-// Ghost visual — no countdown, no auto-removal
-function startGhostTimer() {
-  // No-op: ghost is just a visual AFK flag
-}
-
-function stopGhostTimer() {
-  if (ghostInterval) { clearInterval(ghostInterval); ghostInterval = null; }
 }
 
 // Actions

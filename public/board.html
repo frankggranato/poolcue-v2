@@ -83,14 +83,6 @@
         .win-streak.on-fire .win-label { color: #ef4444; }
         .win-streak.legendary .win-count { color: #f5c518; text-shadow: 0 0 16px rgba(245,197,24,0.6); font-size: 1.4rem; }
         .win-streak.legendary .win-label { color: #f5c518; }
-        .streak-badge {
-            display: inline-block; font-size: 0.65rem; font-weight: 700;
-            padding: 2px 8px; border-radius: 10px; margin-left: 8px;
-            text-transform: uppercase; letter-spacing: 0.5px;
-        }
-        .streak-badge.hot { background: rgba(249,115,22,0.15); color: #f97316; }
-        .streak-badge.on-fire { background: rgba(239,68,68,0.15); color: #ef4444; }
-        .streak-badge.legendary { background: rgba(245,197,24,0.15); color: #f5c518; animation: pulse-glow 2s ease-in-out infinite; }
         .rules { display: flex; gap: 6px; margin-top: 8px; }
         .rule-tag { padding: 4px 10px; background: #1a1a1a; border-radius: 4px; font-size: 0.7rem; color: #888; font-weight: 500; }
         .qr-section { text-align: center; flex-shrink: 0; }
@@ -839,9 +831,7 @@
       debugTimer = setTimeout(() => { debugTaps = 0; }, 2000);
     });
 
-    let debugCounter = 0;
     async function debugAddPlayer() {
-      debugCounter++;
       try {
         await fetch('/api/debug/add-fake', {
           method: 'POST',

@@ -89,6 +89,16 @@ async function createTables() {
       ended_at TIMESTAMP DEFAULT NOW()
     );
   `);
+  // Migration: add mia_at column if missing (added after initial deploy)
+  const colCheck = await pool.query(`
+    SELECT column_name FROM information_schema.columns
+    WHERE table_name = 'queue_entries' AND column_name = 'mia_at'
+  `);
+  if (colCheck.rows.length === 0) {
+    await pool.query('ALTER TABLE queue_entries ADD COLUMN mia_at TIMESTAMP');
+    console.log('✅ Migration: added mia_at column');
+  }
+
   console.log('✅ Tables ready');
 }
 
