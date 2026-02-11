@@ -676,9 +676,10 @@ async function checkConfirmationTimeouts(sessionId) {
   const now = Date.now();
   const actions = [];
 
-  // STEP 1: Reset confirmation state for anyone at pos 1-2
+  // STEP 1: Reset confirmation state for anyone at pos 1-3
+  // Pos 3 is "on deck" — no confirmation needed, clear any leftover state from pos 4
   for (const entry of queue) {
-    if (entry.position <= 2 && (entry.status === 'confirmed' || entry.status === 'ghosted' || entry.confirmation_sent_at)) {
+    if (entry.position <= 3 && (entry.status === 'confirmed' || entry.status === 'ghosted' || entry.confirmation_sent_at)) {
       if (useMemory) {
         entry.status = 'waiting';
         entry.confirmation_sent_at = null;
@@ -693,9 +694,10 @@ async function checkConfirmationTimeouts(sessionId) {
     }
   }
 
-  // STEP 2: Check timeouts for pos 3+ who have been asked
+  // STEP 2: Check timeouts for pos 4+ who have been asked
+  // Position 3 is "on deck" — they're watching the game, never bothered
   for (const entry of queue) {
-    if (entry.position < 3) continue;
+    if (entry.position < 4) continue;
     if (entry.status === 'confirmed') continue;
     if (!entry.confirmation_sent_at) continue;
 
@@ -715,23 +717,22 @@ async function checkConfirmationTimeouts(sessionId) {
     }
   }
 
-  // STEP 3: Cascade confirmations — always keep up to 4 people asked
-  // Count how many are currently "pending" (asked but not confirmed/ghosted/removed)
+  // STEP 3: Cascade confirmations — only ask pos 4+ (pos 3 is "on deck", immune)
   const pendingQueue = queue.filter(e =>
-    e.position >= 3 && e.status === 'waiting' && !e.confirmation_sent_at
+    e.position >= 4 && e.status === 'waiting' && !e.confirmation_sent_at
   ).sort((a, b) => a.position - b.position);
 
   const activelyAsked = queue.filter(e =>
-    e.position >= 3 && e.confirmation_sent_at
+    e.position >= 4 && e.confirmation_sent_at
     && !['confirmed', 'eliminated', 'removed'].includes(e.status)
     && e.status !== 'ghosted'
   ).length;
 
   const confirmed = queue.filter(e =>
-    e.position >= 3 && e.status === 'confirmed'
+    e.position >= 4 && e.status === 'confirmed'
   ).length;
 
-  // We want at least 2 people who have been asked OR confirmed (positions 3-4 only)
+  // Keep 2 people asked/confirmed at positions 4-5
   const slotsToFill = Math.max(0, 2 - activelyAsked - confirmed);
   const toAsk = pendingQueue.slice(0, slotsToFill);
 

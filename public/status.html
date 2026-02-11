@@ -428,7 +428,7 @@ function render() {
   const confirmBtn = document.getElementById('confirmBtn');
   const ghostWarning = document.getElementById('ghostWarning');
 
-  if (pos >= 3 && myEntry.confirmation_sent_at) {
+  if (pos >= 4 && myEntry.confirmation_sent_at) {
     if (myEntry.status === 'confirmed') {
       confirmSection.classList.remove('hidden');
       confirmBtn.textContent = '✓ You\'re locked in';
