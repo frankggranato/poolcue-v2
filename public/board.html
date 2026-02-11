@@ -250,6 +250,25 @@
         .kiosk-overlay .kiosk-icon { font-size: 4rem; }
         .kiosk-overlay .kiosk-title { font-size: 1.8rem; font-weight: 700; color: #fff; }
         .kiosk-overlay .kiosk-sub { font-size: 1rem; color: #f5c518; animation: pulse-glow 2s ease-in-out infinite; }
+
+        /* Debug panel */
+        .debug-panel {
+            position: fixed; bottom: 0; left: 0; right: 0;
+            background: #111; border-top: 2px solid #f5c518;
+            padding: 10px 16px; display: none; z-index: 50;
+            gap: 8px; flex-wrap: wrap; align-items: center;
+        }
+        .debug-panel.show { display: flex; }
+        .debug-panel button {
+            padding: 8px 14px; border: 1px solid #333; border-radius: 6px;
+            background: #1a1a1a; color: #fff; font-size: 0.75rem;
+            font-family: inherit; font-weight: 600; cursor: pointer;
+        }
+        .debug-panel button:active { background: #333; }
+        .debug-panel .debug-label {
+            font-size: 0.65rem; color: #f5c518; font-weight: 700;
+            text-transform: uppercase; letter-spacing: 1px;
+        }
     </style>
 </head>
 <body>
@@ -330,6 +349,16 @@
         <div class="kiosk-icon">🎱</div>
         <div class="kiosk-title">Pool Cue</div>
         <div class="kiosk-sub">Tap anywhere to start</div>
+    </div>
+
+    <!-- Debug panel -->
+    <div class="debug-panel" id="debugPanel">
+        <span class="debug-label">Debug</span>
+        <button onclick="debugAddPlayer()">+ Player</button>
+        <button onclick="debugAddPlayer();debugAddPlayer();debugAddPlayer()">+ 3 Players</button>
+        <button onclick="debugSimResult('king-wins')">King Wins</button>
+        <button onclick="debugSimResult('challenger-wins')">Challenger Wins</button>
+        <button onclick="debugReset()">Reset Queue</button>
     </div>
 
     <script>
@@ -716,6 +745,40 @@
       }
       cornerTimer = setTimeout(() => { cornerTaps = 0; }, 2000);
     });
+
+    // Debug mode: ?debug in URL
+    if (window.location.search.includes('debug')) {
+      document.getElementById('debugPanel').classList.add('show');
+    }
+    let debugCounter = 0;
+    async function debugAddPlayer() {
+      debugCounter++;
+      try {
+        await fetch('/api/debug/add-fake', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tableCode: TABLE_CODE })
+        });
+      } catch (err) { console.error(err); }
+    }
+    async function debugSimResult(result) {
+      try {
+        await fetch('/api/result', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tableCode: TABLE_CODE, result })
+        });
+      } catch (err) { console.error(err); }
+    }
+    async function debugReset() {
+      try {
+        await fetch('/api/session/close', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tableCode: TABLE_CODE, pin: '0000' })
+        });
+      } catch (err) { console.error(err); }
+    }
 
     init();
     </script>

@@ -384,6 +384,27 @@ app.get('/api/suggest-name', (req, res) => {
   res.json({ name: nicknames.suggest() });
 });
 
+// Debug: add a fake player (for testing queue flow)
+app.post('/api/debug/add-fake', async (req, res) => {
+  try {
+    const { tableCode } = req.body;
+    const session = await db.ensureSession(tableCode);
+    if (session.status !== 'active') {
+      return res.status(400).json({ error: 'table_closed' });
+    }
+    const name = nicknames.suggest();
+    const fakePhoneId = 'debug-' + uuidv4();
+    const result = await db.addToQueue(session.id, name, null, fakePhoneId);
+    if (result.error) return res.status(400).json(result);
+    await triggerConfirmations(tableCode);
+    await broadcastQueueUpdate(tableCode);
+    res.json({ success: true, name });
+  } catch (err) {
+    console.error('Debug add-fake error:', err);
+    res.status(500).json({ error: 'server_error' });
+  }
+});
+
 // QR code image (PNG)
 app.get('/qr/:tableCode', async (req, res) => {
   try {
