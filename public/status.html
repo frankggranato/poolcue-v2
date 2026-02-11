@@ -144,7 +144,6 @@
       text-align: center;
       margin: 16px 0;
     }
-    .ghost-warning .timer { font-size: 1.5rem; font-weight: 800; color: var(--danger); }
 
     /* Removed message */
     .removed-msg {
@@ -186,8 +185,7 @@
 
     <!-- Ghost warning -->
     <div class="ghost-warning hidden" id="ghostWarning">
-      <p style="color:var(--danger);font-weight:600;margin-bottom:4px;">⚠️ Confirm now or you'll be removed</p>
-      <div class="timer" id="ghostTimer">2:00</div>
+      <p style="color:var(--danger);font-weight:600;margin-bottom:4px;">⚠️ You look AFK — tap to confirm you're here</p>
     </div>
 
     <!-- Shot caller controls (position 1 only) -->
@@ -221,7 +219,7 @@
     <div class="removed-msg hidden" id="removedMsg">
       <div class="icon">👋</div>
       <h2>You've been removed</h2>
-      <p class="text-dim" style="margin:8px 0 20px;">You missed the confirmation window.</p>
+      <p class="text-dim" style="margin:8px 0 20px;">Someone at the table removed you. Rejoin if you're still here!</p>
       <a href="" id="rejoinLink" class="btn btn-accent" style="text-decoration:none;display:block;">Rejoin Queue</a>
     </div>
   </div>
@@ -448,7 +446,7 @@ function render() {
       if (lastConfirmState !== 'ghosted') {
         if (navigator.vibrate) navigator.vibrate([400, 100, 400, 100, 400]);
         playAlertTone('ghost');
-        showToast('⚠️ Respond now or lose your spot!', 'error');
+        showToast('⚠️ You look AFK — tap to confirm!', 'error');
       }
       lastConfirmState = 'ghosted';
     } else {
@@ -524,21 +522,9 @@ function renderQueue() {
   }
 }
 
-// Ghost countdown timer — 2 min from ghost to auto-removal
+// Ghost visual — no countdown, no auto-removal
 function startGhostTimer() {
-  if (ghostInterval) return;
-  ghostInterval = setInterval(() => {
-    if (!myEntry?.ghosted_at) return;
-    const elapsed = (Date.now() - new Date(myEntry.ghosted_at).getTime()) / 1000;
-    const remaining = Math.max(0, 120 - elapsed);
-    const mins = Math.floor(remaining / 60);
-    const secs = Math.floor(remaining % 60);
-    document.getElementById('ghostTimer').textContent = `${mins}:${String(secs).padStart(2, '0')}`;
-    if (remaining <= 0) {
-      stopGhostTimer();
-      loadState();
-    }
-  }, 1000);
+  // No-op: ghost is just a visual AFK flag
 }
 
 function stopGhostTimer() {

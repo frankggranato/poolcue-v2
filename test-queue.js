@@ -305,10 +305,10 @@ await test('Player confirms — status changes', async () => {
   console.log(`  T${testNum} ✓ C confirmed`);
 });
 
-await test('Ghosted after 3 min — stays in queue', async () => {
+await test('Ghosted after 5 min — stays in queue as AFK flag', async () => {
   const sid = await setup(5);
   await db.checkConfirmationTimeouts(sid);
-  await fakeAsked(sid, 'C', 4); // asked 4 min ago
+  await fakeAsked(sid, 'C', 6); // asked 6 min ago
   await db.checkConfirmationTimeouts(sid);
   const q = await getQ(sid);
   const c = q.find(e => e.player_name === 'C');
@@ -317,15 +317,15 @@ await test('Ghosted after 3 min — stays in queue', async () => {
   console.log(`  T${testNum} ✓ C ghosted but still in line`);
 });
 
-await test('Auto-removed after 5 min total (3 min ghost + 2 min)', async () => {
+await test('No auto-removal — ghosted stays forever until swiped', async () => {
   const sid = await setup(5);
   await db.checkConfirmationTimeouts(sid);
-  await fakeGhosted(sid, 'C', 3); // ghosted 3 min ago (well past 2 min removal threshold)
+  await fakeGhosted(sid, 'C', 30); // ghosted 30 min ago
   await db.checkConfirmationTimeouts(sid);
   const q = await getQ(sid);
-  assert(!q.find(e => e.player_name === 'C'), 'C auto-removed');
-  assert(q.length === 4, '4 remain');
-  console.log(`  T${testNum} ✓ C auto-removed, queue runs itself`);
+  assert(!!q.find(e => e.player_name === 'C'), 'C still in queue');
+  assert(q.length === 5, 'All 5 still there');
+  console.log(`  T${testNum} ✓ No auto-removal even after 30 min`);
 });
 
 await test('Confirmed player promoted — state cleared', async () => {
