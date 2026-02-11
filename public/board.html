@@ -568,13 +568,13 @@
         // Queue items
         for (const entry of waiting) {
             const isGhosted = entry.status === 'ghosted';
-            const needsConfirm = (entry.position === 3 || entry.position === 4) && entry.confirmation_sent_at && entry.status !== 'confirmed';
+            const needsConfirm = entry.confirmation_sent_at && entry.status !== 'confirmed' && !isGhosted;
             let classes = 'queue-item';
             if (isGhosted) classes += ' ghosted';
             else if (needsConfirm) classes += ' needs-confirm';
 
             let confirmHtml = '';
-            if (entry.position === 3 || entry.position === 4) {
+            if (entry.confirmation_sent_at || entry.status === 'confirmed') {
                 if (entry.status === 'confirmed') {
                     confirmHtml = '<span class="confirm-status confirmed">✓ Ready</span>';
                 } else if (isGhosted) {

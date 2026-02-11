@@ -321,12 +321,12 @@ function render() {
   }
   lastPosition = pos;
 
-  // Confirmation section
+  // Confirmation section — show for ANY position 3+ that has been asked
   const confirmSection = document.getElementById('confirmSection');
   const confirmBtn = document.getElementById('confirmBtn');
   const ghostWarning = document.getElementById('ghostWarning');
 
-  if ((pos === 3 || pos === 4) && myEntry.confirmation_sent_at) {
+  if (pos >= 3 && myEntry.confirmation_sent_at) {
     if (myEntry.status === 'confirmed') {
       confirmSection.classList.remove('hidden');
       confirmBtn.textContent = '✓ You\'re locked in';
@@ -485,8 +485,6 @@ function showToast(msg, type) {
   setTimeout(() => { el.classList.remove('show'); }, 2500);
 }
 
-let lastWsHash = '';
-
 // XSS protection
 function esc(str) {
   if (!str) return '';
@@ -503,10 +501,7 @@ function connectWS() {
   ws.onmessage = (e) => {
     const data = JSON.parse(e.data);
     if (data.type === 'queue_update') {
-      // Skip fetch if queue data is identical
-      const wsHash = JSON.stringify(data.queue.map(e => e.id + e.position + e.status + e.win_streak));
-      if (wsHash === lastWsHash) return;
-      lastWsHash = wsHash;
+      // Always re-fetch on queue update to get fresh my_entry position
       loadState();
     } else if (data.type === 'confirm_request' || data.type === 'player_removed' || data.type === 'player_ghosted') {
       loadState();

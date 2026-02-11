@@ -221,6 +221,108 @@ async function addToQueue(sessionId, playerName, partnerName, phoneId) {
   return res.rows[0];
 }
 
+// ============================================
+// Position compaction — ensures positions are always 1, 2, 3, ...
+// Also handles promotion: skips unconfirmed/ghosted players for pos 2
+// ============================================
+
+async function compactPositions(sessionId) {
+  const queue = await getQueue(sessionId);
+  if (queue.length === 0) return;
+
+  // Sort everyone by current position
+  const sorted = [...queue].sort((a, b) => a.position - b.position);
+
+  // King (pos 1) — first player, or existing king
+  let king = sorted.find(e => e.position === 1);
+  if (!king) {
+    king = sorted[0];
+    await setPosition(king.id, 1);
+    await resetConfirmationState(king.id);
+  }
+
+  const others = sorted.filter(e => e !== king);
+
+  // Find challenger: prioritize confirmed/ready players, skip ghosted
+  // PASS 1: Prefer confirmed or never-asked (clearly ready)
+  let challengerPicked = null;
+  for (const entry of others) {
+    if (isReadyToPlay(entry)) {
+      challengerPicked = entry;
+      break;
+    }
+  }
+
+  // PASS 2: If nobody "ready", pick first non-ghosted player
+  // The game must NEVER stall — someone always fills challenger
+  if (!challengerPicked && others.length > 0) {
+    for (const entry of others) {
+      if (entry.status !== 'ghosted') {
+        challengerPicked = entry;
+        break;
+      }
+    }
+  }
+
+  // PASS 3: If literally everyone is ghosted, pick first anyway
+  if (!challengerPicked && others.length > 0) {
+    challengerPicked = others[0];
+  }
+
+  // Build remaining list (preserving relative order)
+  const remaining = others.filter(e => e !== challengerPicked);
+
+  // Assign positions sequentially
+  let pos = 2;
+  if (challengerPicked) {
+    await setPosition(challengerPicked.id, pos);
+    // Reset confirmation state when promoted to challenger
+    await resetConfirmationState(challengerPicked.id);
+    pos = 3;
+  }
+  for (const entry of remaining) {
+    await setPosition(entry.id, pos);
+    pos++;
+  }
+}
+
+// Is this player ready to fill the challenger slot?
+function isReadyToPlay(entry) {
+  // Confirmed = explicitly tapped "I'm here"
+  if (entry.status === 'confirmed') return true;
+  // Waiting and never been asked = they just joined, assume present
+  if (entry.status === 'waiting' && !entry.confirmation_sent_at) return true;
+  // Everything else (ghosted, asked-but-not-responded) = not ready
+  return false;
+}
+
+async function setPosition(entryId, position) {
+  if (useMemory) {
+    const entry = mem.queue_entries.find(e => e.id === entryId);
+    if (entry) entry.position = position;
+  } else {
+    await pool.query('UPDATE queue_entries SET position = $1 WHERE id = $2', [position, entryId]);
+  }
+}
+
+async function resetConfirmationState(entryId) {
+  if (useMemory) {
+    const entry = mem.queue_entries.find(e => e.id === entryId);
+    if (entry) {
+      entry.status = 'waiting';
+      entry.confirmation_sent_at = null;
+      entry.confirmed_at = null;
+      entry.ghosted_at = null;
+    }
+  } else {
+    await pool.query(
+      `UPDATE queue_entries SET status = 'waiting', confirmation_sent_at = NULL,
+       confirmed_at = NULL, ghosted_at = NULL WHERE id = $1`,
+      [entryId]
+    );
+  }
+}
+
 async function recordResult(sessionId, result) {
   // result: 'king-wins' or 'challenger-wins'
   const queue = await getQueue(sessionId);
@@ -251,33 +353,23 @@ async function recordResult(sessionId, result) {
     loserName = challenger.player_name;
     winnerStreak = (king.win_streak || 0) + 1;
 
-    // King stays, challenger eliminated, everyone shifts up
+    // King stays at pos 1 with incremented streak, challenger eliminated
     if (useMemory) {
       king.win_streak = winnerStreak;
       challenger.status = 'eliminated';
       challenger.removed_at = now;
-      // Shift everyone up
-      mem.queue_entries.filter(e =>
-        e.session_id === sessionId && e.position > 2
-        && !['eliminated', 'removed'].includes(e.status)
-      ).forEach(e => { e.position -= 1; });
     } else {
       await pool.query('UPDATE queue_entries SET win_streak = $1 WHERE id = $2', [winnerStreak, king.id]);
       await pool.query(
         `UPDATE queue_entries SET status = 'eliminated', removed_at = NOW() WHERE id = $1`,
         [challenger.id]
       );
-      await pool.query(
-        `UPDATE queue_entries SET position = position - 1
-         WHERE session_id = $1 AND position > 2 AND status NOT IN ('eliminated', 'removed')`,
-        [sessionId]
-      );
     }
   } else {
-    // Challenger wins — king eliminated, challenger becomes king
+    // Challenger wins — king eliminated, challenger becomes new king
     winnerName = challenger.player_name;
     loserName = king.player_name;
-    winnerStreak = 1; // New king starts at 1
+    winnerStreak = 1;
 
     if (useMemory) {
       king.status = 'eliminated';
@@ -285,27 +377,21 @@ async function recordResult(sessionId, result) {
       challenger.position = 1;
       challenger.win_streak = winnerStreak;
       challenger.status = 'waiting';
-      // Shift everyone up
-      mem.queue_entries.filter(e =>
-        e.session_id === sessionId && e.position > 2
-        && !['eliminated', 'removed'].includes(e.status)
-      ).forEach(e => { e.position -= 1; });
     } else {
       await pool.query(
         `UPDATE queue_entries SET status = 'eliminated', removed_at = NOW() WHERE id = $1`,
         [king.id]
       );
       await pool.query(
-        'UPDATE queue_entries SET position = 1, win_streak = $1 WHERE id = $2',
-        [winnerStreak, challenger.id]
-      );
-      await pool.query(
-        `UPDATE queue_entries SET position = position - 1
-         WHERE session_id = $1 AND position > 2 AND status NOT IN ('eliminated', 'removed')`,
-        [sessionId]
+        'UPDATE queue_entries SET position = 1, win_streak = $1, status = $2 WHERE id = $3',
+        [winnerStreak, 'waiting', challenger.id]
       );
     }
   }
+
+  // Compact positions — this handles promotion of next ready player to challenger
+  // and renumbers everyone sequentially
+  await compactPositions(sessionId);
 
   // Log the game
   if (useMemory) {
@@ -368,7 +454,6 @@ async function undoLastRemoval(sessionId) {
   const elapsed = (Date.now() - new Date(entry.removed_at).getTime()) / 1000;
   if (elapsed > 60) return { error: 'undo_expired' };
 
-  // Put them back at position 2 (challenger), shift everyone else down
   const queue = await getQueue(sessionId);
 
   // Read game log before deleting to reverse streak
@@ -387,26 +472,19 @@ async function undoLastRemoval(sessionId) {
   // entry.position === 1 means they were king who lost (challenger-wins)
   // entry.position === 2 means they were challenger who lost (king-wins)
   const wasKingWhoLost = entry.position === 1;
+  const currentKing = queue.find(e => e.position === 1);
 
   if (useMemory) {
-    const currentKing = queue.find(e => e.position === 1);
-
     if (wasKingWhoLost && currentKing) {
-      // Challenger-wins undo: swap positions back
-      // Shift pos >= 2 down to make room
-      queue.filter(e => e.position >= 2).forEach(e => { e.position += 1; });
-      // Former challenger (current king) goes back to pos 2
+      // Challenger-wins undo: former king gets restored to pos 1
       currentKing.position = 2;
       currentKing.win_streak = 0;
-      // Restored king goes back to pos 1 (win_streak still intact from before elimination)
       entry.status = 'waiting';
       entry.position = 1;
     } else {
       // King-wins undo: restore challenger to pos 2
-      queue.filter(e => e.position >= 2).forEach(e => { e.position += 1; });
       entry.status = 'waiting';
       entry.position = 2;
-      // Decrement king's streak
       if (currentKing && lastLog) {
         currentKing.win_streak = Math.max(0, (currentKing.win_streak || 0) - 1);
       }
@@ -416,49 +494,41 @@ async function undoLastRemoval(sessionId) {
     entry.confirmed_at = null;
     entry.ghosted_at = null;
   } else {
-    // Shift everyone at pos >= 2 down
+    // Restore the eliminated player first
     await pool.query(
-      `UPDATE queue_entries SET position = position + 1
-       WHERE session_id = $1 AND position >= 2 AND status NOT IN ('eliminated', 'removed')`,
-      [sessionId]
+      `UPDATE queue_entries SET status = 'waiting', removed_at = NULL,
+       confirmation_sent_at = NULL, confirmed_at = NULL, ghosted_at = NULL WHERE id = $1`,
+      [entry.id]
     );
 
-    if (wasKingWhoLost) {
-      // Challenger-wins undo: swap back
-      // Current king (former challenger) → pos 2 with streak 0
+    if (wasKingWhoLost && currentKing) {
+      // Former challenger (current king) → pos 2 with streak 0
       await pool.query(
-        `UPDATE queue_entries SET position = 2, win_streak = 0
-         WHERE session_id = $1 AND position = 1 AND status NOT IN ('eliminated', 'removed')`,
-        [sessionId]
+        'UPDATE queue_entries SET position = 2, win_streak = 0 WHERE id = $1',
+        [currentKing.id]
       );
-      // Restored king → pos 1 (win_streak still intact from before elimination)
-      await pool.query(
-        `UPDATE queue_entries SET status = 'waiting', position = 1, removed_at = NULL,
-         confirmation_sent_at = NULL, confirmed_at = NULL, ghosted_at = NULL WHERE id = $1`,
-        [entry.id]
-      );
+      // Restored king → pos 1
+      await pool.query('UPDATE queue_entries SET position = 1 WHERE id = $1', [entry.id]);
     } else {
-      // King-wins undo: restore challenger to pos 2
-      await pool.query(
-        `UPDATE queue_entries SET status = 'waiting', position = 2, removed_at = NULL,
-         confirmation_sent_at = NULL, confirmed_at = NULL, ghosted_at = NULL WHERE id = $1`,
-        [entry.id]
-      );
+      // Restored challenger → pos 2
+      await pool.query('UPDATE queue_entries SET position = 2 WHERE id = $1', [entry.id]);
       // Decrement king's streak
-      if (lastLog) {
+      if (currentKing && lastLog) {
         await pool.query(
-          `UPDATE queue_entries SET win_streak = GREATEST(0, win_streak - 1)
-           WHERE session_id = $1 AND position = 1 AND status NOT IN ('eliminated', 'removed')`,
-          [sessionId]
+          'UPDATE queue_entries SET win_streak = GREATEST(0, win_streak - 1) WHERE id = $1',
+          [currentKing.id]
         );
       }
     }
   }
 
+  // Recompact all positions after the restored entry
+  await compactPositions(sessionId);
+
   // Remove the game log entry too
   if (useMemory) {
-    const lastLog = mem.game_log.filter(g => g.session_id === sessionId).pop();
-    if (lastLog) mem.game_log = mem.game_log.filter(g => g.id !== lastLog.id);
+    const logEntry = mem.game_log.filter(g => g.session_id === sessionId).pop();
+    if (logEntry) mem.game_log = mem.game_log.filter(g => g.id !== logEntry.id);
   } else {
     await pool.query(
       'DELETE FROM game_log WHERE id = (SELECT id FROM game_log WHERE session_id = $1 ORDER BY ended_at DESC LIMIT 1)',
@@ -476,35 +546,24 @@ async function leaveQueue(sessionId, phoneId) {
       && !['eliminated', 'removed'].includes(e.status)
     );
     if (!entry) return { error: 'not_in_queue' };
-    const pos = entry.position;
     entry.status = 'removed';
     entry.removed_at = new Date();
-    // Shift everyone above them down
-    mem.queue_entries.filter(e =>
-      e.session_id === sessionId && e.position > pos
-      && !['eliminated', 'removed'].includes(e.status)
-    ).forEach(e => { e.position -= 1; });
-    return { success: true, name: entry.player_name };
+  } else {
+    const res = await pool.query(
+      `SELECT * FROM queue_entries WHERE session_id = $1 AND phone_id = $2
+       AND status NOT IN ('eliminated', 'removed') LIMIT 1`,
+      [sessionId, phoneId]
+    );
+    const entry = res.rows[0];
+    if (!entry) return { error: 'not_in_queue' };
+    await pool.query(
+      `UPDATE queue_entries SET status = 'removed', removed_at = NOW() WHERE id = $1`,
+      [entry.id]
+    );
   }
-
-  const res = await pool.query(
-    `SELECT * FROM queue_entries WHERE session_id = $1 AND phone_id = $2
-     AND status NOT IN ('eliminated', 'removed') LIMIT 1`,
-    [sessionId, phoneId]
-  );
-  const entry = res.rows[0];
-  if (!entry) return { error: 'not_in_queue' };
-
-  await pool.query(
-    `UPDATE queue_entries SET status = 'removed', removed_at = NOW() WHERE id = $1`,
-    [entry.id]
-  );
-  await pool.query(
-    `UPDATE queue_entries SET position = position - 1
-     WHERE session_id = $1 AND position > $2 AND status NOT IN ('eliminated', 'removed')`,
-    [sessionId, entry.position]
-  );
-  return { success: true, name: entry.player_name };
+  // Recompact positions (handles promotion of next ready player)
+  await compactPositions(sessionId);
+  return { success: true };
 }
 
 async function confirmPresence(sessionId, phoneId) {
@@ -575,43 +634,34 @@ async function removePlayer(sessionId, entryId) {
   if (useMemory) {
     const entry = mem.queue_entries.find(e => e.id === entryId);
     if (!entry) return { error: 'not_found' };
-    const pos = entry.position;
     entry.status = 'removed';
     entry.removed_at = new Date();
-    mem.queue_entries.filter(e =>
-      e.session_id === sessionId && e.position > pos
-      && !['eliminated', 'removed'].includes(e.status)
-    ).forEach(e => { e.position -= 1; });
-    return { success: true, name: entry.player_name };
+  } else {
+    const res = await pool.query('SELECT * FROM queue_entries WHERE id = $1', [entryId]);
+    const entry = res.rows[0];
+    if (!entry) return { error: 'not_found' };
+    await pool.query(
+      `UPDATE queue_entries SET status = 'removed', removed_at = NOW() WHERE id = $1`,
+      [entry.id]
+    );
   }
-
-  const res = await pool.query('SELECT * FROM queue_entries WHERE id = $1', [entryId]);
-  const entry = res.rows[0];
-  if (!entry) return { error: 'not_found' };
-
-  await pool.query(
-    `UPDATE queue_entries SET status = 'removed', removed_at = NOW() WHERE id = $1`,
-    [entry.id]
-  );
-  await pool.query(
-    `UPDATE queue_entries SET position = position - 1
-     WHERE session_id = $1 AND position > $2 AND status NOT IN ('eliminated', 'removed')`,
-    [sessionId, entry.position]
-  );
-  return { success: true, name: entry.player_name };
+  // Recompact positions
+  await compactPositions(sessionId);
+  return { success: true };
 }
 
 async function checkConfirmationTimeouts(sessionId) {
-  // Called every 30 seconds by server
-  // Position 3-4 with confirmation_sent_at but no confirmed_at:
-  //   3 min → ghost
-  //   2 min after ghost → remove
+  // Called every 30 seconds by server + on every queue-changing event
+  // Cascade confirmation system:
+  //   - Ask up to 4 people to confirm (not just pos 3-4)
+  //   - When someone ghosts, cascade to ask the next person
+  //   - Ghosted players stay visible but get skipped for promotion
+  //   - 3 min unresponsive → ghost, 2 more min → remove (5 min total)
   const queue = await getQueue(sessionId);
   const now = Date.now();
   const actions = [];
 
-  // STEP 1: Reset confirmation state for anyone who shifted to pos 1-2
-  // (they confirmed when they were at 3/4, but now they're up front — clean slate)
+  // STEP 1: Reset confirmation state for anyone at pos 1-2
   for (const entry of queue) {
     if (entry.position <= 2 && (entry.status === 'confirmed' || entry.status === 'ghosted' || entry.confirmation_sent_at)) {
       if (useMemory) {
@@ -628,26 +678,16 @@ async function checkConfirmationTimeouts(sessionId) {
     }
   }
 
-  // STEP 2: Send confirmations to pos 3-4 who haven't been asked yet
+  // STEP 2: Check timeouts for ALL pos 3+ who have been asked
   for (const entry of queue) {
-    if ((entry.position === 3 || entry.position === 4)
-        && entry.status === 'waiting'
-        && !entry.confirmation_sent_at) {
-      await sendConfirmation(sessionId, entry.id);
-      actions.push({ action: 'confirmation_sent', name: entry.player_name, id: entry.id, phone_id: entry.phone_id, position: entry.position });
-    }
-  }
-
-  // STEP 3: Check timeouts for pos 3-4 who HAVE been asked
-  for (const entry of queue) {
-    if (entry.position < 3 || entry.position > 4) continue;
+    if (entry.position < 3) continue;
     if (entry.status === 'confirmed') continue;
     if (!entry.confirmation_sent_at) continue;
 
     const elapsed = (now - new Date(entry.confirmation_sent_at).getTime()) / 1000;
 
     if (entry.status === 'ghosted') {
-      // Already ghosted — check for full removal (2 min after ghost)
+      // Already ghosted — check for full removal (2 min after ghost = 5 min total)
       const ghostElapsed = (now - new Date(entry.ghosted_at).getTime()) / 1000;
       if (ghostElapsed >= 120) {
         await removePlayer(sessionId, entry.id);
@@ -659,6 +699,43 @@ async function checkConfirmationTimeouts(sessionId) {
       actions.push({ action: 'ghosted', name: entry.player_name, id: entry.id });
     }
   }
+
+  // STEP 3: Cascade confirmations — always keep up to 4 people asked
+  // Count how many are currently "pending" (asked but not confirmed/ghosted/removed)
+  const pendingQueue = queue.filter(e =>
+    e.position >= 3 && e.status === 'waiting' && !e.confirmation_sent_at
+  ).sort((a, b) => a.position - b.position);
+
+  const activelyAsked = queue.filter(e =>
+    e.position >= 3 && e.confirmation_sent_at
+    && !['confirmed', 'eliminated', 'removed'].includes(e.status)
+    && e.status !== 'ghosted'
+  ).length;
+
+  const confirmed = queue.filter(e =>
+    e.position >= 3 && e.status === 'confirmed'
+  ).length;
+
+  // We want at least 4 people who have been asked OR confirmed
+  const slotsToFill = Math.max(0, 4 - activelyAsked - confirmed);
+  const toAsk = pendingQueue.slice(0, slotsToFill);
+
+  for (const entry of toAsk) {
+    await sendConfirmation(sessionId, entry.id);
+    actions.push({
+      action: 'confirmation_sent',
+      name: entry.player_name,
+      id: entry.id,
+      phone_id: entry.phone_id,
+      position: entry.position
+    });
+  }
+
+  // STEP 4: If any removals happened, recompact positions
+  if (actions.some(a => a.action === 'removed')) {
+    await compactPositions(sessionId);
+  }
+
   return actions;
 }
 
@@ -725,6 +802,7 @@ module.exports = {
   ghostPlayer,
   removePlayer,
   checkConfirmationTimeouts,
+  compactPositions,
   getEntryByPhone,
   updatePartnerName,
   ensureSession
