@@ -93,19 +93,19 @@
         /* Main Content - Natural column flow: top-to-bottom, then next column */
         .main {
             flex: 1;
-            display: block;
-            column-count: 2;
-            column-gap: 14px;
-            column-fill: balance;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0 14px;
             overflow: hidden;
-            height: 0;
             min-height: 0;
             padding: 12px 16px;
         }
+        .main-full-row { grid-column: 1 / -1; }
+        .queue-col { display: flex; flex-direction: column; gap: 4px; overflow: hidden; }
         .queue-label {
             font-size: 0.75rem; font-weight: 600; color: #555;
             text-transform: uppercase; letter-spacing: 1px;
-            margin-bottom: 6px; column-span: all;
+            margin-bottom: 6px;
         }
 
         /* Challenger Card */
@@ -116,7 +116,6 @@
             padding: 8px 12px;
             margin-bottom: 4px;
             transition: all 0.15s;
-            break-inside: avoid;
             animation: slideIn 0.3s ease-out;
         }
         .challenger-card .name-row { display: flex; align-items: center; gap: 8px; }
@@ -138,8 +137,6 @@
             padding: 10px 12px;
             background: #141414;
             border-radius: 5px;
-            margin-bottom: 4px;
-            break-inside: avoid;
             animation: slideIn 0.3s ease-out;
         }
         @keyframes slideIn {
@@ -562,7 +559,7 @@
 
         let html = '';
 
-        // Challenger card
+        // Challenger card (spans full width)
         if (challenger) {
             const partnerStr = challenger.partner_name ? ` & ${esc(challenger.partner_name)}` : '';
             let chalStatusHtml = '';
@@ -575,7 +572,7 @@
             } else if (challenger.confirmation_sent_at) {
                 chalStatusHtml = '<span class="confirm-status">🟡 Waiting</span>';
             }
-            html += `<div class="challenger-card swipeable" data-role="challenger">
+            html += `<div class="challenger-card swipeable main-full-row" data-role="challenger">
                 <div class="name-row">
                     <span class="pos">2</span>
                     <span class="name">${esc(challenger.player_name)}${partnerStr}</span>
@@ -585,8 +582,8 @@
             </div>`;
         }
 
-        // Queue items (capped at MAX_DISPLAY)
-        for (const entry of displayWaiting) {
+        // Build queue item HTML pieces
+        function buildQueueItem(entry) {
             const isGhosted = entry.status === 'ghosted';
             const isMia = entry.status === 'mia';
             const needsConfirm = entry.confirmation_sent_at && entry.status === 'waiting';
@@ -607,15 +604,27 @@
             }
 
             const partnerStr = entry.partner_name ? ` & ${esc(entry.partner_name)}` : '';
-            html += `<div class="${classes}">
+            return `<div class="${classes}">
                 <span class="pos">${entry.position}</span>
                 <span class="name">${esc(entry.player_name)}${partnerStr}</span>
                 ${confirmHtml}
             </div>`;
         }
 
+        // Split queue into two columns: fill column 1 first, then column 2
+        const half = Math.ceil(displayWaiting.length / 2);
+        const col1Items = displayWaiting.slice(0, half);
+        const col2Items = displayWaiting.slice(half);
+
+        html += '<div class="queue-col">';
+        for (const entry of col1Items) html += buildQueueItem(entry);
+        html += '</div>';
+        html += '<div class="queue-col">';
+        for (const entry of col2Items) html += buildQueueItem(entry);
+        html += '</div>';
+
         if (overflow > 0) {
-            html += `<div class="queue-item" style="justify-content:center;color:#555;font-style:italic;">
+            html += `<div class="queue-item main-full-row" style="justify-content:center;color:#555;font-style:italic;">
                 +${overflow} more in queue
             </div>`;
         }
