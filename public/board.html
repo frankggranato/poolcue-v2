@@ -238,6 +238,18 @@
             position: absolute; bottom: 16px;
             font-size: 0.6rem; color: #333; letter-spacing: 1px;
         }
+
+        /* Kiosk start overlay */
+        .kiosk-overlay {
+            display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.95); z-index: 200;
+            justify-content: center; align-items: center;
+            flex-direction: column; text-align: center; gap: 16px; cursor: pointer;
+        }
+        .kiosk-overlay.show { display: flex; }
+        .kiosk-overlay .kiosk-icon { font-size: 4rem; }
+        .kiosk-overlay .kiosk-title { font-size: 1.8rem; font-weight: 700; color: #fff; }
+        .kiosk-overlay .kiosk-sub { font-size: 1rem; color: #f5c518; animation: pulse-glow 2s ease-in-out infinite; }
     </style>
 </head>
 <body>
@@ -311,6 +323,13 @@
                 <button class="confirm-yes" onclick="executeConfirm()">Confirm</button>
             </div>
         </div>
+    </div>
+
+    <!-- Kiosk fullscreen overlay -->
+    <div class="kiosk-overlay" id="kioskOverlay" onclick="launchKiosk()">
+        <div class="kiosk-icon">🎱</div>
+        <div class="kiosk-title">Pool Cue</div>
+        <div class="kiosk-sub">Tap anywhere to start</div>
     </div>
 
     <script>
@@ -654,6 +673,15 @@
         pendingAction = { type: 'undo' };
         document.getElementById('confirmMessage').textContent = 'Undo last removal?';
         document.getElementById('confirmOverlay').classList.add('show');
+    }
+
+    // Kiosk mode: show overlay if ?kiosk in URL
+    if (window.location.search.includes('kiosk')) {
+      document.getElementById('kioskOverlay').classList.add('show');
+    }
+    function launchKiosk() {
+      document.getElementById('kioskOverlay').classList.remove('show');
+      document.documentElement.requestFullscreen().catch(() => {});
     }
 
     // Fullscreen toggle

@@ -7,43 +7,17 @@
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, sans-serif; background: #111; color: #fff; padding: 40px 20px; text-align: center; }
-    h1 { font-size: 1.5rem; margin-bottom: 8px; }
-    .sub { color: #888; font-size: 0.9rem; margin-bottom: 24px; }
-    .step { background: #1a1a1a; border: 1px solid #333; border-radius: 12px; padding: 20px; margin-bottom: 16px; text-align: left; }
-    .step-num { display: inline-block; background: #f5c518; color: #000; font-weight: 800; width: 28px; height: 28px; line-height: 28px; text-align: center; border-radius: 50%; margin-right: 10px; font-size: 0.85rem; }
-    .step-title { font-weight: 600; font-size: 1rem; margin-bottom: 8px; }
-    .step-body { color: #aaa; font-size: 0.85rem; line-height: 1.6; }
-    .big-btn { display: block; width: 100%; padding: 18px; background: #f5c518; color: #000; font-size: 1.1rem; font-weight: 700; border: none; border-radius: 12px; cursor: pointer; margin: 24px 0; text-decoration: none; }
-    .tip { background: rgba(245,197,24,0.1); border: 1px solid rgba(245,197,24,0.3); border-radius: 12px; padding: 16px; margin-top: 20px; }
-    .tip-title { color: #f5c518; font-weight: 600; font-size: 0.85rem; margin-bottom: 6px; }
-    .tip-body { color: #888; font-size: 0.8rem; line-height: 1.5; }
+    body { font-family: -apple-system, sans-serif; background: #111; color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; padding: 40px 20px; text-align: center; }
+    h1 { font-size: 2rem; margin-bottom: 12px; }
+    p { color: #888; font-size: 0.95rem; margin-bottom: 32px; line-height: 1.5; }
+    a.big-btn { display: block; width: 100%; max-width: 400px; padding: 28px; background: #f5c518; color: #000; font-size: 1.3rem; font-weight: 800; border: none; border-radius: 16px; cursor: pointer; text-decoration: none; }
+    .note { color: #555; font-size: 0.8rem; margin-top: 32px; line-height: 1.5; }
   </style>
 </head>
 <body>
-  <h1>🎱 Kiosk Setup</h1>
-  <p class="sub">3 taps, no keyboard needed</p>
-
-  <div class="step">
-    <div class="step-title"><span class="step-num">1</span> Open the Board</div>
-    <div class="step-body">Tap the big button below to go to the board.</div>
-  </div>
-
-  <div class="step">
-    <div class="step-title"><span class="step-num">2</span> Go Fullscreen</div>
-    <div class="step-body">On the board, tap <strong>⛶ Fullscreen</strong> in the bottom-right corner. The browser bars disappear and you get the clean board.</div>
-  </div>
-
-  <div class="step">
-    <div class="step-title"><span class="step-num">3</span> Auto-Reopen on Boot</div>
-    <div class="step-body">In Chrome settings → <strong>On startup</strong> → pick <strong>"Continue where you left off"</strong>. Now when the stick PC reboots, Chrome opens right back to the board. Just tap Fullscreen again.</div>
-  </div>
-
-  <a class="big-btn" href="/board/table1">Open the Board →</a>
-
-  <div class="tip">
-    <div class="tip-title">💡 To Exit Fullscreen</div>
-    <div class="tip-body">Tap the top-left corner of the board 5 times quickly. It will ask you to confirm, then Chrome closes. Or tap ✕ Exit in the bottom-right.</div>
-  </div>
+  <h1>🎱 Pool Cue</h1>
+  <p>Tap the button below. It goes fullscreen automatically.</p>
+  <a class="big-btn" href="/board/table1?kiosk">Start Board →</a>
+  <p class="note">To exit fullscreen later: tap the top-left corner 5 times<br>To get back here: go to pool-cue.onrender.com/kiosk.html</p>
 </body>
 </html>
