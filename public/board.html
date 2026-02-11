@@ -100,7 +100,6 @@
             min-height: 0;
             padding: 12px 16px;
         }
-        .main-full-row { grid-column: 1 / -1; }
         .queue-col { display: flex; flex-direction: column; gap: 4px; overflow: hidden; }
         .queue-label {
             font-size: 0.75rem; font-weight: 600; color: #555;
@@ -108,20 +107,12 @@
             margin-bottom: 6px;
         }
 
-        /* Challenger Card */
+        /* Challenger Card — just a queue-item with red accent */
         .challenger-card {
-            background: #1a1a1a;
             border: 1px solid rgba(239,68,68,0.3);
-            border-radius: 5px;
-            padding: 8px 12px;
-            margin-bottom: 4px;
-            transition: all 0.15s;
-            animation: slideIn 0.3s ease-out;
         }
-        .challenger-card .name-row { display: flex; align-items: center; gap: 8px; }
-        .challenger-card .pos { font-size: 0.9rem; color: #ef4444; min-width: 20px; font-weight: 500; }
-        .challenger-card .name { font-size: 1rem; font-weight: 600; color: #fff; }
-        .challenger-card .hint { font-size: 0.65rem; color: #444; margin-top: 2px; margin-left: 28px; }
+        .challenger-card .pos { color: #ef4444; }
+        .challenger-card .name { color: #fff; font-weight: 600; }
         .hint { font-size: 0.7rem; color: #444; }
 
         /* Swipe states */
@@ -559,35 +550,13 @@
 
         let html = '';
 
-        // Challenger card (spans full width)
-        if (challenger) {
-            const partnerStr = challenger.partner_name ? ` & ${esc(challenger.partner_name)}` : '';
-            let chalStatusHtml = '';
-            if (challenger.status === 'confirmed') {
-                chalStatusHtml = '<span class="confirm-status confirmed">✓ Here</span>';
-            } else if (challenger.status === 'ghosted') {
-                chalStatusHtml = '<span class="confirm-status" style="color:#ef4444;background:rgba(239,68,68,0.15)">🔴 Probably left</span>';
-            } else if (challenger.status === 'mia') {
-                chalStatusHtml = '<span class="confirm-status" style="color:#f97316;background:rgba(249,115,22,0.15)">🟠 MIA</span>';
-            } else if (challenger.confirmation_sent_at) {
-                chalStatusHtml = '<span class="confirm-status">🟡 Waiting</span>';
-            }
-            html += `<div class="challenger-card swipeable main-full-row" data-role="challenger">
-                <div class="name-row">
-                    <span class="pos">2</span>
-                    <span class="name">${esc(challenger.player_name)}${partnerStr}</span>
-                    ${chalStatusHtml}
-                </div>
-                <div class="hint">← swipe if lost →</div>
-            </div>`;
-        }
-
-        // Build queue item HTML pieces
-        function buildQueueItem(entry) {
+        // Build a single item (works for challenger or regular queue entry)
+        function buildItem(entry, isChallenger) {
             const isGhosted = entry.status === 'ghosted';
             const isMia = entry.status === 'mia';
             const needsConfirm = entry.confirmation_sent_at && entry.status === 'waiting';
-            let classes = 'queue-item';
+
+            let classes = isChallenger ? 'queue-item challenger-card swipeable' : 'queue-item';
             if (isGhosted) classes += ' ghosted';
             else if (isMia) classes += ' mia';
             else if (needsConfirm) classes += ' needs-confirm';
@@ -604,30 +573,37 @@
             }
 
             const partnerStr = entry.partner_name ? ` & ${esc(entry.partner_name)}` : '';
-            return `<div class="${classes}">
+            let extraHtml = '';
+            if (isChallenger && queue.some(e => e.position === 2)) {
+                extraHtml = '<div class="hint" style="margin-left:30px;">← swipe if lost →</div>';
+            }
+            return `<div class="${classes}"${isChallenger ? ' data-role="challenger"' : ''}>
                 <span class="pos">${entry.position}</span>
                 <span class="name">${esc(entry.player_name)}${partnerStr}</span>
                 ${confirmHtml}
+                ${extraHtml}
             </div>`;
         }
 
-        // Split queue into two columns: fill column 1 first, then column 2
-        const half = Math.ceil(displayWaiting.length / 2);
-        const col1Items = displayWaiting.slice(0, half);
-        const col2Items = displayWaiting.slice(half);
+        // Combine challenger + queue into one flat list
+        const allItems = [];
+        if (challenger) allItems.push({ entry: challenger, isChallenger: true });
+        for (const entry of displayWaiting) allItems.push({ entry, isChallenger: false });
+
+        // Split: fill column 1 first, then column 2
+        const half = Math.ceil(allItems.length / 2);
+        const col1 = allItems.slice(0, half);
+        const col2 = allItems.slice(half);
 
         html += '<div class="queue-col">';
-        for (const entry of col1Items) html += buildQueueItem(entry);
+        for (const item of col1) html += buildItem(item.entry, item.isChallenger);
         html += '</div>';
         html += '<div class="queue-col">';
-        for (const entry of col2Items) html += buildQueueItem(entry);
-        html += '</div>';
-
+        for (const item of col2) html += buildItem(item.entry, item.isChallenger);
         if (overflow > 0) {
-            html += `<div class="queue-item main-full-row" style="justify-content:center;color:#555;font-style:italic;">
-                +${overflow} more in queue
-            </div>`;
+            html += `<div class="queue-item" style="justify-content:center;color:#555;font-style:italic;">+${overflow} more</div>`;
         }
+        html += '</div>';
 
         // Only update DOM if content actually changed (prevents blink)
         if (mainEl.dataset.lastHtml !== html) {
