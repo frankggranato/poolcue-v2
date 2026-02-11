@@ -233,11 +233,32 @@ async function compactPositions(sessionId) {
   // Sort by current position — preserves join order
   const sorted = [...queue].sort((a, b) => a.position - b.position);
 
+  // === PROMOTION PRIORITY ===
+  // When a slot opens, pick the best candidate in this order:
+  //   1. Confirmed — they tapped "I'm here", proven present
+  //   2. Never asked — just joined or far back, benefit of the doubt
+  //   3. Asked but waiting — sent a confirm request, no response yet
+  //   4. Ghosted — 3+ min unresponsive, probably gone (last resort)
+  // Within each tier, queue order (position) is preserved.
+  function pickBestCandidate(candidates) {
+    const confirmed = candidates.find(e => e.status === 'confirmed');
+    if (confirmed) return confirmed;
+
+    const neverAsked = candidates.find(e => e.status === 'waiting' && !e.confirmation_sent_at);
+    if (neverAsked) return neverAsked;
+
+    const askedWaiting = candidates.find(e => e.status === 'waiting' && e.confirmation_sent_at);
+    if (askedWaiting) return askedWaiting;
+
+    // Everyone is ghosted — take first anyway. Table never sits empty.
+    return candidates[0];
+  }
+
   // === STEP 1: Ensure king at position 1 ===
   let king = sorted.find(e => e.position === 1);
   let newKing = false;
   if (!king) {
-    king = sorted[0];
+    king = pickBestCandidate(sorted);
     newKing = true;
   }
   await setPosition(king.id, 1);
@@ -247,31 +268,20 @@ async function compactPositions(sessionId) {
   if (others.length === 0) return;
 
   // === STEP 2: Find or keep challenger ===
-  // If someone is already at position 2, keep them (don't re-promote)
   const existingChallenger = others.find(e => e.position === 2);
 
   let challenger;
   if (existingChallenger) {
-    // Challenger slot is filled — don't touch it
     challenger = existingChallenger;
   } else {
-    // Challenger slot is empty (game just ended, someone left, etc.)
-    // Walk in queue order. Only skip GHOSTED players.
-    // Everyone else (confirmed, never-asked, asked-but-not-timed-out)
-    // gets their turn in order. No line-jumping.
-    challenger = others.find(e => e.status !== 'ghosted');
-
-    // Fallback: if literally everyone is ghosted, take first anyway
-    // Table never sits empty.
-    if (!challenger) challenger = others[0];
-
-    // Clear confirmation state for newly promoted challenger
+    challenger = pickBestCandidate(others);
     await resetConfirmationState(challenger.id);
   }
   await setPosition(challenger.id, 2);
 
   // === STEP 3: Renumber remaining positions 3, 4, 5... ===
-  // Relative order preserved — no reordering based on confirmation
+  // Queue order preserved — confirmed players don't reorder among themselves.
+  // Their advantage is promotion to challenger/king, not queue position shuffling.
   const remaining = others.filter(e => e !== challenger);
   let pos = 3;
   for (const entry of remaining) {
