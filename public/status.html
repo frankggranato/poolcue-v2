@@ -110,34 +110,6 @@
       font-weight: 600;
       margin-bottom: 10px;
     }
-    .result-btns {
-      display: flex;
-      gap: 10px;
-      margin-bottom: 16px;
-    }
-    .result-btn {
-      flex: 1;
-      padding: 16px;
-      border-radius: 12px;
-      font-size: 0.95rem;
-      font-weight: 700;
-      cursor: pointer;
-      font-family: inherit;
-      border: none;
-      transition: opacity 0.15s, transform 0.1s;
-    }
-    .result-btn:active:not(:disabled) { transform: scale(0.97); }
-    .result-btn:disabled { cursor: not-allowed; }
-    .result-btn.win {
-      background: rgba(245,197,24,0.15);
-      border: 2px solid rgba(245,197,24,0.3);
-      color: var(--accent);
-    }
-    .result-btn.lose {
-      background: rgba(239,68,68,0.15);
-      border: 2px solid rgba(239,68,68,0.3);
-      color: var(--danger);
-    }
     .rule-toggle {
       display: flex;
       gap: 8px;
@@ -210,12 +182,6 @@
 
     <!-- Shot caller controls (position 1 only) -->
     <div class="controls-section hidden" id="shotCallerControls">
-      <h3>Game Controls</h3>
-      <div class="result-btns">
-        <button class="result-btn win" onclick="recordResult('king-wins')">🏆 I Won</button>
-        <button class="result-btn lose" onclick="recordResult('challenger-wins')">💀 They Won</button>
-      </div>
-
       <h3>Game Type</h3>
       <div class="rule-toggle" id="gameTypeToggle">
         <button class="rule-opt" data-val="singles" onclick="setGameType('singles')">Singles</button>
@@ -379,13 +345,6 @@ function render() {
   const controls = document.getElementById('shotCallerControls');
   if (pos === 1) {
     controls.classList.remove('hidden');
-    // Disable result buttons if no challenger yet
-    const resultBtns = controls.querySelectorAll('.result-btn');
-    const hasChallenger = queue.length >= 2;
-    resultBtns.forEach(btn => {
-      btn.disabled = !hasChallenger;
-      btn.style.opacity = hasChallenger ? '1' : '0.35';
-    });
     // Update toggle states
     document.querySelectorAll('#gameTypeToggle .rule-opt').forEach(el => {
       el.classList.toggle('active', el.dataset.val === session?.game_type);
@@ -467,31 +426,6 @@ async function confirmPresence() {
     }
   } catch (err) {
     showToast('Error — try again', 'error');
-  }
-}
-
-let resultPending = false;
-
-async function recordResult(result) {
-  if (resultPending) return;
-  resultPending = true;
-  // Disable buttons immediately
-  document.querySelectorAll('.result-btn').forEach(b => { b.disabled = true; b.style.opacity = '0.35'; });
-  try {
-    const res = await fetch('/api/result', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tableCode: TABLE_CODE, result })
-    });
-    const data = await res.json();
-    if (data.success) {
-      showToast(result === 'king-wins' ? '🏆 Winner!' : 'New challenger on the table', 'info');
-    }
-  } catch (err) {
-    showToast('Error — try again', 'error');
-  } finally {
-    // Re-enable after short delay to prevent double-tap
-    setTimeout(() => { resultPending = false; }, 1500);
   }
 }
 
