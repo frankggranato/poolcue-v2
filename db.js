@@ -235,22 +235,36 @@ async function compactPositions(sessionId) {
 
   // === PROMOTION PRIORITY ===
   // When a slot opens, pick the best candidate in this order:
-  //   1. Confirmed — they tapped "I'm here", proven present
-  //   2. Never asked — just joined or far back, benefit of the doubt
-  //   3. Asked but waiting — sent a confirm request, no response yet
+  //   1. Confirmed — tapped "I'm here", proven present
+  //   2. Not yet suspect — never asked, OR asked recently (<2 min)
+  //      These people are almost certainly still here. Queue order wins.
+  //   3. Probably AFK — asked 2+ min ago, no response. Yellow flag.
   //   4. Ghosted — 3+ min unresponsive, probably gone (last resort)
   // Within each tier, queue order (position) is preserved.
+  const now = Date.now();
+  const AFK_THRESHOLD = 120_000; // 2 minutes in ms
+
   function pickBestCandidate(candidates) {
+    // Tier 1: Confirmed — proven here
     const confirmed = candidates.find(e => e.status === 'confirmed');
     if (confirmed) return confirmed;
 
-    const neverAsked = candidates.find(e => e.status === 'waiting' && !e.confirmation_sent_at);
-    if (neverAsked) return neverAsked;
+    // Tier 2: Not suspect — never asked, or asked recently
+    const notSuspect = candidates.find(e =>
+      e.status === 'waiting' && (
+        !e.confirmation_sent_at ||
+        (now - new Date(e.confirmation_sent_at).getTime()) < AFK_THRESHOLD
+      )
+    );
+    if (notSuspect) return notSuspect;
 
-    const askedWaiting = candidates.find(e => e.status === 'waiting' && e.confirmation_sent_at);
-    if (askedWaiting) return askedWaiting;
+    // Tier 3: Probably AFK — asked 2+ min, still waiting
+    const probablyAfk = candidates.find(e =>
+      e.status === 'waiting' && e.confirmation_sent_at
+    );
+    if (probablyAfk) return probablyAfk;
 
-    // Everyone is ghosted — take first anyway. Table never sits empty.
+    // Tier 4: Everyone is ghosted — take first. Table never sits empty.
     return candidates[0];
   }
 
@@ -258,7 +272,10 @@ async function compactPositions(sessionId) {
   let king = sorted.find(e => e.position === 1);
   let newKing = false;
   if (!king) {
-    king = pickBestCandidate(sorted);
+    // If there's an existing challenger, they auto-promote to king.
+    // They were already at the table — no need to evaluate tiers.
+    const existingPos2 = sorted.find(e => e.position === 2);
+    king = existingPos2 || pickBestCandidate(sorted);
     newKing = true;
   }
   await setPosition(king.id, 1);
@@ -467,6 +484,17 @@ async function undoLastRemoval(sessionId) {
   // entry.position === 2 means they were challenger who lost (king-wins)
   const wasKingWhoLost = entry.position === 1;
   const currentKing = queue.find(e => e.position === 1);
+
+  // The person who was promoted to pos 2 after the result needs to be
+  // displaced — the original player is being restored to that slot.
+  const promotedPlayer = queue.find(e => e.position === 2);
+  if (promotedPlayer) {
+    if (useMemory) {
+      promotedPlayer.position = 999; // temp — compactPositions will fix
+    } else {
+      await pool.query('UPDATE queue_entries SET position = 999 WHERE id = $1', [promotedPlayer.id]);
+    }
+  }
 
   if (useMemory) {
     if (wasKingWhoLost && currentKing) {

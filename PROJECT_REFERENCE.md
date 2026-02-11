@@ -62,18 +62,20 @@ PoolCue-v2/
 ### Fair promotion (`compactPositions` in db.js)
 When a game ends or someone leaves, positions compact:
 
-1. **King (pos 1):** If empty, promote best candidate (see priority below).
-2. **Challenger (pos 2):** If someone already there, keep them. If empty, promote best candidate.
+1. **King (pos 1):** If empty, existing challenger auto-promotes (they're at the table). If no challenger either, use promotion priority below.
+2. **Challenger (pos 2):** If someone already there, keep them. If empty, promote best candidate using priority below.
 3. **Remaining:** Renumber sequentially (3, 4, 5...) preserving relative order.
 
-**Promotion priority** (when king or challenger slot opens):
+**Promotion priority** (`pickBestCandidate`):
 1. **Confirmed** — tapped "I'm here", proven present (first in queue order)
-2. **Never asked** — just joined or far back, benefit of the doubt (first in queue order)
-3. **Asked but waiting** — confirmation sent, no response yet (first in queue order)
+2. **Not suspect** — never asked, or asked recently (<2 min). Almost certainly still here. Queue order wins.
+3. **Probably AFK** — asked 2+ min ago, no response. Yellow flag. (first in queue order)
 4. **Ghosted** — 3+ min unresponsive, last resort (table never sits empty)
 
 **Key properties:**
 - Confirming earns you priority over unresponsive players ahead of you
+- Recently-asked players (<2 min) aren't penalized — they just haven't checked their phone yet
+- Existing challenger always auto-promotes to king (they're already at the table)
 - Queue order is preserved within each priority tier
 - Ghosted players keep their spot but get skipped for promotion
 - If a ghosted player confirms (un-ghosts), they resume at their position
