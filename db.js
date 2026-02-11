@@ -761,11 +761,8 @@ module.exports = {
   undoLastRemoval,
   leaveQueue,
   confirmPresence,
-  sendConfirmation,
-  ghostPlayer,
   removePlayer,
   checkConfirmationTimeouts,
-  compactPositions,
   updatePartnerName,
   ensureSession
 };
