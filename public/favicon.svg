@@ -1,1 +1,5 @@
-²ø1šYì
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <circle cx="50" cy="50" r="46" fill="#111" stroke="#333" stroke-width="3"/>
+  <circle cx="50" cy="50" r="20" fill="#fff"/>
+  <text x="50" y="57" font-family="Arial,sans-serif" font-size="24" font-weight="900" fill="#111" text-anchor="middle">8</text>
+</svg>

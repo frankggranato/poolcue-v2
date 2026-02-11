@@ -427,17 +427,18 @@ app.get('/qr/:tableCode', async (req, res) => {
 
 async function triggerConfirmations(tableCode) {
   // Delegates to checkConfirmationTimeouts which handles:
-  // 1. Reset stale confirmation state for pos 1-2
-  // 2. Send new confirmations to next players in line
-  // 3. Ghost/remove unresponsive players
-  // Returns true if any state changed (caller should broadcast)
+  // 1. Reset confirmation state for pos 1 (king is at the table)
+  // 2. Escalate unresponsive players: waiting → MIA (5m) → ghosted (10m)
+  // 3. Send new confirmation requests to pos 2-5
+  // No auto-removal — bartender/players swipe manually.
   const session = await db.getSession(tableCode);
   if (!session) return false;
   const actions = await db.checkConfirmationTimeouts(session.id);
   if (actions.length > 0) {
-    // Send targeted WebSocket messages
+    // Send targeted WebSocket messages for each action type
     for (const action of actions) {
       if (action.action === 'confirmation_sent') {
+        // Notify the specific phone that was asked to confirm
         for (const [ws, info] of clients) {
           if (info.tableCode === tableCode && info.phoneId === action.phone_id) {
             ws.send(JSON.stringify({
@@ -449,7 +450,19 @@ async function triggerConfirmations(tableCode) {
             }));
           }
         }
+      } else if (action.action === 'mia') {
+        // Player went orange (5 min no response) — notify their phone
+        for (const [ws, info] of clients) {
+          if (info.tableCode === tableCode) {
+            ws.send(JSON.stringify({
+              type: 'player_mia',
+              name: action.name,
+              entry_id: action.id
+            }));
+          }
+        }
       } else if (action.action === 'ghosted' || action.action === 'removed') {
+        // Player went red (10 min) or was removed — notify all watchers
         for (const [ws, info] of clients) {
           if (info.tableCode === tableCode) {
             ws.send(JSON.stringify({

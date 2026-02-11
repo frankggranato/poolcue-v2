@@ -631,7 +631,7 @@ function connectWS() {
     if (data.type === 'queue_update') {
       // Always re-fetch on queue update to get fresh my_entry position
       loadState();
-    } else if (data.type === 'confirm_request' || data.type === 'player_removed' || data.type === 'player_ghosted') {
+    } else if (data.type === 'confirm_request' || data.type === 'player_mia' || data.type === 'player_removed' || data.type === 'player_ghosted') {
       loadState();
     } else if (data.type === 'session_closed') {
       window.location.href = `/join/${TABLE_CODE}`;

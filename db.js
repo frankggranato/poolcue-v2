@@ -481,12 +481,13 @@ async function undoLastRemoval(sessionId) {
     entry.removed_at = null;
     entry.confirmation_sent_at = null;
     entry.confirmed_at = null;
+    entry.mia_at = null;
     entry.ghosted_at = null;
   } else {
     // Restore the eliminated player first
     await pool.query(
       `UPDATE queue_entries SET status = 'waiting', removed_at = NULL,
-       confirmation_sent_at = NULL, confirmed_at = NULL, ghosted_at = NULL WHERE id = $1`,
+       confirmation_sent_at = NULL, confirmed_at = NULL, mia_at = NULL, ghosted_at = NULL WHERE id = $1`,
       [entry.id]
     );
 
@@ -803,6 +804,8 @@ module.exports = {
   undoLastRemoval,
   leaveQueue,
   confirmPresence,
+  miaPlayer,
+  ghostPlayer,
   removePlayer,
   checkConfirmationTimeouts,
   updatePartnerName,
