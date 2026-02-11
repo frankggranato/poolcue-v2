@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Pool Cue — Status</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="stylesheet" href="/style.css">
   <style>
     .position-hero {
@@ -227,6 +228,7 @@ let avgGameSeconds = null;
 let ghostInterval = null;
 let lastStateHash = '';
 let lastQueueHtml = '';
+let lastPosition = null;
 
 function stateHash() {
   const me = myEntry ? `${myEntry.position}|${myEntry.status}|${myEntry.win_streak}|${!!myEntry.confirmation_sent_at}` : 'none';
@@ -304,6 +306,21 @@ function render() {
     waitEl.textContent = estimateWait(pos);
   }
 
+  // Alert on position change to challenger or king
+  if (lastPosition !== null && lastPosition !== pos) {
+    if (pos === 2) {
+      if (navigator.vibrate) navigator.vibrate([300, 150, 300, 150, 300]);
+      showToast('⚔️ You\'re up next — get to the table!', 'info');
+    } else if (pos === 1) {
+      if (navigator.vibrate) navigator.vibrate([500, 200, 500]);
+      showToast('👑 You\'re the Shot Caller!', 'success');
+    } else if (pos === 3 && lastPosition > 3) {
+      if (navigator.vibrate) navigator.vibrate([200]);
+      showToast('Almost up — you\'re #3', 'info');
+    }
+  }
+  lastPosition = pos;
+
   // Confirmation section
   const confirmSection = document.getElementById('confirmSection');
   const confirmBtn = document.getElementById('confirmBtn');
@@ -332,8 +349,6 @@ function render() {
       confirmBtn.disabled = false;
       ghostWarning.classList.add('hidden');
       stopGhostTimer();
-      // Vibrate if supported
-      if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
     }
   } else {
     confirmSection.classList.add('hidden');

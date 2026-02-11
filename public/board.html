@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Pool Cue</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -67,7 +68,12 @@
         }
         .shot-caller-section { flex: 1; }
         .meta { font-size: 0.65rem; color: #666; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
-        .shot-caller-name { font-size: 2rem; font-weight: 700; color: #fff; letter-spacing: -0.03em; line-height: 1.1; }
+        .shot-caller-name { font-size: 2rem; font-weight: 700; color: #fff; letter-spacing: -0.03em; line-height: 1.1; transition: opacity 0.2s; }
+        .shot-caller-name.flash { animation: nameFlash 0.5s ease-out; }
+        @keyframes nameFlash {
+            0% { opacity: 0; transform: scale(0.95); }
+            100% { opacity: 1; transform: scale(1); }
+        }
         .shot-caller-name.empty { font-size: 1.3rem; color: #444; font-weight: 500; }
         .win-streak { display: flex; align-items: baseline; gap: 6px; margin-top: 4px; }
         .win-count { font-size: 1.2rem; font-weight: 700; color: #e5a147; }
@@ -106,6 +112,7 @@
             margin-bottom: 3px;
             transition: all 0.15s;
             break-inside: avoid;
+            animation: slideIn 0.3s ease-out;
         }
         .challenger-card .name-row { display: flex; align-items: center; gap: 8px; }
         .challenger-card .pos { font-size: 0.75rem; color: #ef4444; min-width: 18px; font-weight: 500; }
@@ -130,6 +137,11 @@
             border-radius: 5px;
             margin-bottom: 3px;
             break-inside: avoid;
+            animation: slideIn 0.3s ease-out;
+        }
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(-8px); }
+            to { opacity: 1; transform: translateY(0); }
         }
         .queue-item .pos { font-size: 0.75rem; color: #444; min-width: 18px; font-weight: 500; }
         .queue-item .name { font-size: 0.8rem; color: #aaa; flex: 1; }
@@ -147,6 +159,10 @@
             border-top: 1px solid rgba(255,255,255,0.06);
             position: relative;
             display: flex; align-items: center; justify-content: center;
+        }
+        .footer-brand {
+            font-size: 0.6rem; color: #333;
+            text-transform: uppercase; letter-spacing: 2px; font-weight: 600;
         }
         .footer-btn {
             position: absolute; bottom: 12px;
@@ -254,11 +270,15 @@
             <!-- Main queue area -->
             <div class="main" id="mainContent"></div>
 
-            <!-- Empty state (shown when no players) -->
+            <!-- Empty state (shown when session active but no players) -->
             <div class="state-screen" id="stateEmpty">
-                <div class="icon">🎱</div>
-                <h2>Table Open</h2>
-                <p>Scan the QR code to put your name up</p>
+                <div class="welcome-brand">Table Open</div>
+                <div style="font-size:1.8rem;font-weight:700;color:#fff;margin-bottom:4px;">First Up?</div>
+                <div style="font-size:0.85rem;color:#666;margin-bottom:20px;">Scan to put your name on the board</div>
+                <div class="welcome-qr-wrap">
+                    <img id="emptyQrImg" src="" style="width:160px;height:160px;display:block;" alt="QR">
+                </div>
+                <div class="welcome-cta">Scan with your phone's camera</div>
             </div>
 
             <!-- Welcome / Idle state (no session or closed) -->
@@ -275,6 +295,7 @@
 
         <div class="footer">
             <button class="footer-btn undo-btn" id="undoBtn" onclick="doUndo()">↩ Undo</button>
+            <span class="footer-brand">Pool Cue</span>
         </div>
     </div>
     </div>
@@ -297,6 +318,7 @@
     let session = null;
     let avgGameSeconds = null;
     let pendingAction = null;
+    let lastKingName = '';
 
     // Undo is always available — server validates the 60-second window
 
@@ -311,6 +333,7 @@
     // QR code
     document.getElementById('qrImg').src = `/qr/${TABLE_CODE}`;
     document.getElementById('welcomeQrImg').src = `/qr/${TABLE_CODE}`;
+    document.getElementById('emptyQrImg').src = `/qr/${TABLE_CODE}`;
 
     // ============================================
     // WebSocket
@@ -407,8 +430,15 @@
 
         if (king) {
             const partnerStr = king.partner_name ? ` & ${king.partner_name}` : '';
-            kingNameEl.textContent = king.player_name + partnerStr;
+            const fullName = king.player_name + partnerStr;
+            kingNameEl.textContent = fullName;
             kingNameEl.className = 'shot-caller-name';
+            // Flash animation on new king
+            if (fullName !== lastKingName && lastKingName !== '') {
+                kingNameEl.classList.add('flash');
+                setTimeout(() => kingNameEl.classList.remove('flash'), 600);
+            }
+            lastKingName = fullName;
             if (king.win_streak > 0) {
                 winStreakEl.style.display = 'flex';
                 document.getElementById('winCount').textContent = king.win_streak;
@@ -607,7 +637,7 @@
                 const res = await fetch('/api/undo', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ tableCode: TABLE_CODE, pin: pendingAction.pin })
+                    body: JSON.stringify({ tableCode: TABLE_CODE, source: 'board' })
                 });
                 const data = await res.json();
                 if (data.error) console.log('Undo rejected:', data.error);
@@ -619,9 +649,7 @@
     }
 
     function doUndo() {
-        const enteredPin = prompt('Enter PIN to undo:');
-        if (!enteredPin) return;
-        pendingAction = { type: 'undo', pin: enteredPin };
+        pendingAction = { type: 'undo' };
         document.getElementById('confirmMessage').textContent = 'Undo last removal?';
         document.getElementById('confirmOverlay').classList.add('show');
     }

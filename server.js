@@ -277,8 +277,9 @@ app.post('/api/confirm', async (req, res) => {
 // Undo last removal
 app.post('/api/undo', async (req, res) => {
   try {
-    const { tableCode, pin } = req.body;
-    if (pin !== SESSION_PIN) return res.status(403).json({ error: 'bad_pin' });
+    const { tableCode, pin, source } = req.body;
+    // Board can undo without PIN (it's physically at the table)
+    if (source !== 'board' && pin !== SESSION_PIN) return res.status(403).json({ error: 'bad_pin' });
     const session = await db.getSession(tableCode);
     if (!session) return res.status(404).json({ error: 'no_session' });
     const result = await db.undoLastRemoval(session.id);
