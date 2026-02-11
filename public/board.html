@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Pool Cue</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #111111;
+            --bg-secondary: #1a1a1a;
+            --text-primary: #f2f2f2;
+            --text-secondary: #888888;
+            --text-muted: #555555;
+            --accent: #f5c518;
+            --success: #22c55e;
+            --danger: #ef4444;
+            --border: rgba(255,255,255,0.08);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; user-select: none; }
+        html, body { height: 100%; overflow: hidden; background: var(--bg-secondary); }
+        body { font-family: 'Inter', -apple-system, sans-serif; display: flex; justify-content: center; align-items: center; padding: 10px; }
+
+        /* Wooden Frame */
+        .frame {
+            width: 100%;
+            max-width: 620px;
+            height: 100vh;
+            max-height: 96vh;
+            background: linear-gradient(165deg, #5d4037 0%, #4e342e 30%, #3e2723 70%, #2d1f1a 100%);
+            border-radius: 6px;
+            padding: 14px;
+            box-shadow:
+                inset 2px 2px 4px rgba(255,255,255,0.1),
+                inset -2px -2px 4px rgba(0,0,0,0.3),
+                0 8px 32px rgba(0,0,0,0.6),
+                0 2px 8px rgba(0,0,0,0.4);
+            position: relative;
+        }
+        .frame::before {
+            content: '';
+            position: absolute;
+            top: 10px; left: 10px; right: 10px; bottom: 10px;
+            border: 2px solid rgba(0,0,0,0.3);
+            border-radius: 4px;
+            pointer-events: none;
+        }
+
+        .board {
+            width: 100%; height: 100%;
+            background: #0c0c0c;
+            border-radius: 4px;
+            display: flex; flex-direction: column;
+            overflow: hidden;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.5);
+        }
+        #board-content {
+            display: flex; flex-direction: column;
+            flex: 1; min-height: 0;
+        }
+
+        /* Header */
+        .header {
+            display: flex; justify-content: space-between; align-items: flex-start;
+            padding: 12px 20px;
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+        }
+        .shot-caller-section { flex: 1; }
+        .meta { font-size: 0.65rem; color: #666; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+        .shot-caller-name { font-size: 2rem; font-weight: 700; color: #fff; letter-spacing: -0.03em; line-height: 1.1; }
+        .shot-caller-name.empty { font-size: 1.3rem; color: #444; font-weight: 500; }
+        .win-streak { display: flex; align-items: baseline; gap: 6px; margin-top: 4px; }
+        .win-count { font-size: 1.2rem; font-weight: 700; color: #e5a147; }
+        .win-label { font-size: 0.7rem; color: #666; }
+        .rules { display: flex; gap: 6px; margin-top: 8px; }
+        .rule-tag { padding: 4px 10px; background: #1a1a1a; border-radius: 4px; font-size: 0.7rem; color: #888; font-weight: 500; }
+        .qr-section { text-align: center; flex-shrink: 0; }
+        .qr-box { background: #fff; padding: 10px; border-radius: 8px; }
+        .qr-code { width: 130px; height: 130px; display: block; }
+        .qr-label { font-size: 0.65rem; color: #666; margin-top: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+        /* Main Content - Natural column flow: top-to-bottom, then next column */
+        .main {
+            flex: 1;
+            display: block;
+            column-count: 3;
+            column-gap: 12px;
+            column-fill: auto;
+            overflow: hidden;
+            height: 0;
+            min-height: 0;
+            padding: 12px 16px;
+        }
+        .queue-label {
+            font-size: 0.65rem; font-weight: 600; color: #555;
+            text-transform: uppercase; letter-spacing: 1px;
+            margin-bottom: 6px; column-span: all;
+        }
+
+        /* Challenger Card */
+        .challenger-card {
+            background: #1a1a1a;
+            border: 1px solid rgba(239,68,68,0.3);
+            border-radius: 5px;
+            padding: 6px 12px;
+            margin-bottom: 3px;
+            transition: all 0.15s;
+            break-inside: avoid;
+        }
+        .challenger-card .name-row { display: flex; align-items: center; gap: 8px; }
+        .challenger-card .pos { font-size: 0.75rem; color: #ef4444; min-width: 18px; font-weight: 500; }
+        .challenger-card .name { font-size: 0.85rem; font-weight: 600; color: #fff; }
+        .challenger-card .hint { font-size: 0.55rem; color: #444; margin-top: 2px; margin-left: 26px; }
+        .hint { font-size: 0.6rem; color: #444; }
+
+        /* Swipe states */
+        .shot-caller-section.swiping { transition: none; }
+        .shot-caller-section.swipe-left { background: rgba(239,68,68,0.1); }
+        .shot-caller-section.swipe-right { background: rgba(34,197,94,0.1); }
+        .challenger-card.swiping { cursor: grabbing; }
+        .challenger-card.swipe-left, .challenger-card.swipe-right { background: rgba(239,68,68,0.2); border-color: rgba(239,68,68,0.4); }
+
+        .empty-slot { padding: 14px 16px; color: #333; font-size: 0.9rem; }
+
+        /* Queue Items */
+        .queue-item {
+            display: flex; align-items: center; gap: 8px;
+            padding: 8px 10px;
+            background: #141414;
+            border-radius: 5px;
+            margin-bottom: 3px;
+            break-inside: avoid;
+        }
+        .queue-item .pos { font-size: 0.75rem; color: #444; min-width: 18px; font-weight: 500; }
+        .queue-item .name { font-size: 0.8rem; color: #aaa; flex: 1; }
+        .queue-item .confirm-status { font-size: 0.65rem; opacity: 0.9; padding: 2px 6px; border-radius: 4px; }
+        .queue-item .confirm-status.confirmed { color: #22c55e; background: rgba(34,197,94,0.15); }
+        .queue-item.needs-confirm { border-left: 2px solid #eab308; }
+        .queue-item.needs-confirm .confirm-status { color: #eab308; background: rgba(234,179,8,0.15); }
+        .queue-item.ghosted { opacity: 0.4; border-left: 2px solid #ef4444; }
+        .queue-item.ghosted .confirm-status { color: #ef4444; background: rgba(239,68,68,0.15); }
+
+        /* Footer */
+        .footer {
+            height: 50px;
+            background: #0a0a0a;
+            border-top: 1px solid rgba(255,255,255,0.06);
+            position: relative;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .footer-btn {
+            position: absolute; bottom: 12px;
+            padding: 6px 14px;
+            background: transparent;
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 4px;
+            color: #555;
+            font-size: 0.7rem;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .footer-btn:hover { border-color: #fff; color: #fff; }
+        .footer-btn.disabled { opacity: 0.3; cursor: default; }
+        .undo-btn { left: 12px; }
+
+        /* Confirm Dialog */
+        .confirm-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.9); z-index: 100; justify-content: center; align-items: center; }
+        .confirm-overlay.show { display: flex; }
+        .confirm-box { background: #1a1a1a; border: 1px solid rgba(255,255,255,0.1); padding: 24px 32px; border-radius: 12px; text-align: center; }
+        .confirm-box p { font-size: 1.1rem; color: #fff; margin-bottom: 20px; }
+        .confirm-buttons { display: flex; gap: 12px; justify-content: center; }
+        .confirm-buttons button { padding: 12px 28px; border: none; border-radius: 6px; font-family: inherit; font-size: 0.9rem; font-weight: 500; cursor: pointer; }
+        .confirm-yes { background: #fff; color: #0c0c0c; }
+        .confirm-no { background: transparent; border: 1px solid rgba(255,255,255,0.2); color: #888; }
+
+        /* Empty/Closed states */
+        .state-screen {
+            display: none; flex: 1; align-items: center; justify-content: center;
+            flex-direction: column; text-align: center; gap: 12px;
+        }
+        .state-screen.active { display: flex; }
+        .state-screen .icon { font-size: 3rem; }
+        .state-screen h2 { font-size: 1.3rem; font-weight: 600; color: #888; }
+        .state-screen p { color: #555; font-size: 0.85rem; }
+    </style>
+</head>
+<body>
+    <div class="frame">
+    <div class="board">
+        <div id="board-content">
+            <!-- Header: shot caller + QR -->
+            <div class="header">
+                <div class="shot-caller-section swipeable" id="kingSection" data-role="king">
+                    <div class="meta" id="avgTimeLabel"></div>
+                    <div class="meta">Shot Caller</div>
+                    <div class="shot-caller-name" id="kingName">Table Open</div>
+                    <div class="win-streak" id="winStreak" style="display:none;">
+                        <span class="win-count" id="winCount">0</span>
+                        <span class="win-label">wins</span>
+                    </div>
+                    <div class="hint" id="kingHint" style="display:none;">← swipe off if lost →</div>
+                    <div class="rules" id="rulesDisplay">
+                        <span class="rule-tag" id="tagGameType">Singles</span>
+                        <span class="rule-tag" id="tagRuleType">Bar Rules</span>
+                    </div>
+                </div>
+                <div class="qr-section">
+                    <div class="qr-box">
+                        <img id="qrImg" src="" class="qr-code" alt="QR">
+                    </div>
+                    <div class="qr-label">Scan to Join</div>
+                </div>
+            </div>
+
+            <!-- Main queue area -->
+            <div class="main" id="mainContent"></div>
+
+            <!-- Empty state (shown when no players) -->
+            <div class="state-screen" id="stateEmpty">
+                <div class="icon">🎱</div>
+                <h2>Table Open</h2>
+                <p>Scan the QR code to put your name up</p>
+            </div>
+
+            <!-- Closed state -->
+            <div class="state-screen" id="stateClosed">
+                <div class="icon">🌙</div>
+                <h2>Table Closed</h2>
+                <p>See you next time</p>
+            </div>
+        </div>
+
+        <div class="footer">
+            <button class="footer-btn undo-btn" id="undoBtn" onclick="doUndo()">↩ Undo</button>
+        </div>
+    </div>
+    </div>
+
+    <!-- Confirm overlay -->
+    <div class="confirm-overlay" id="confirmOverlay">
+        <div class="confirm-box">
+            <p id="confirmMessage">Remove player?</p>
+            <div class="confirm-buttons">
+                <button class="confirm-no" onclick="hideConfirm()">Cancel</button>
+                <button class="confirm-yes" onclick="executeConfirm()">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    const TABLE_CODE = window.location.pathname.split('/').pop();
+    let ws = null;
+    let queue = [];
+    let session = null;
+    let avgGameSeconds = null;
+    let pendingAction = null;
+
+    // Undo is always available — server validates the 60-second window
+
+    // XSS protection
+    function esc(str) {
+      if (!str) return '';
+      const d = document.createElement('div');
+      d.textContent = str;
+      return d.innerHTML;
+    }
+
+    // QR code
+    document.getElementById('qrImg').src = `/qr/${TABLE_CODE}`;
+
+    // ============================================
+    // WebSocket
+    // ============================================
+    function connectWS() {
+        const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+        ws = new WebSocket(`${proto}://${location.host}/ws?table=${TABLE_CODE}`);
+        ws.onmessage = (e) => {
+            const data = JSON.parse(e.data);
+            if (data.type === 'queue_update') {
+                queue = data.queue;
+                session = data.session;
+                avgGameSeconds = data.avg_game_seconds;
+                render();
+            } else if (data.type === 'session_closed') {
+                session = { status: 'closed' };
+                queue = [];
+                render();
+            }
+        };
+        ws.onopen = () => {
+            // Re-fetch full state on reconnect (covers any missed updates)
+            fetch(`/api/queue/${TABLE_CODE}`).then(r => r.json()).then(data => {
+                queue = data.queue || [];
+                session = data.session;
+                avgGameSeconds = data.avg_game_seconds;
+                render();
+            }).catch(() => {});
+        };
+        ws.onclose = () => setTimeout(connectWS, 2000);
+        ws.onerror = () => ws.close();
+    }
+
+    async function init() {
+        try {
+            const res = await fetch(`/api/queue/${TABLE_CODE}`);
+            const data = await res.json();
+            queue = data.queue || [];
+            session = data.session;
+            avgGameSeconds = data.avg_game_seconds;
+            render();
+        } catch (err) {
+            console.error('Init fetch failed:', err);
+        }
+        connectWS();
+    }
+
+    // ============================================
+    // Render
+    // ============================================
+    function render() {
+        const mainEl = document.getElementById('mainContent');
+        const stateEmpty = document.getElementById('stateEmpty');
+        const stateClosed = document.getElementById('stateClosed');
+        const headerEl = document.querySelector('.header');
+        const footerEl = document.querySelector('.footer');
+
+        // Closed state
+        if (!session || session.status === 'closed') {
+            headerEl.style.display = 'none';
+            mainEl.style.display = 'none';
+            footerEl.style.display = 'none';
+            stateEmpty.classList.remove('active');
+            stateClosed.classList.add('active');
+            return;
+        }
+        stateClosed.classList.remove('active');
+
+        // Empty queue
+        if (queue.length === 0) {
+            headerEl.style.display = 'flex';
+            mainEl.style.display = 'none';
+            footerEl.style.display = 'flex';
+            stateEmpty.classList.add('active');
+            // Reset header to empty state
+            document.getElementById('kingName').textContent = 'Table Open';
+            document.getElementById('kingName').className = 'shot-caller-name empty';
+            document.getElementById('winStreak').style.display = 'none';
+            document.getElementById('kingHint').style.display = 'none';
+            renderRules();
+            return;
+        }
+
+        stateEmpty.classList.remove('active');
+        headerEl.style.display = 'flex';
+        mainEl.style.display = 'block';
+        footerEl.style.display = 'flex';
+
+        // King (position 1)
+        const king = queue.find(e => e.position === 1);
+        const kingNameEl = document.getElementById('kingName');
+        const winStreakEl = document.getElementById('winStreak');
+        const kingHintEl = document.getElementById('kingHint');
+
+        if (king) {
+            const partnerStr = king.partner_name ? ` & ${king.partner_name}` : '';
+            kingNameEl.textContent = king.player_name + partnerStr;
+            kingNameEl.className = 'shot-caller-name';
+            if (king.win_streak > 0) {
+                winStreakEl.style.display = 'flex';
+                document.getElementById('winCount').textContent = king.win_streak;
+            } else {
+                winStreakEl.style.display = 'none';
+            }
+            kingHintEl.style.display = 'block';
+        } else {
+            kingNameEl.textContent = 'Table Open';
+            kingNameEl.className = 'shot-caller-name empty';
+            winStreakEl.style.display = 'none';
+            kingHintEl.style.display = 'none';
+        }
+
+        // Avg game time
+        const avgLabel = document.getElementById('avgTimeLabel');
+        if (avgGameSeconds && avgGameSeconds > 0) {
+            avgLabel.textContent = `~${Math.round(avgGameSeconds / 60)}m avg`;
+        } else {
+            avgLabel.textContent = '';
+        }
+
+        // Rules tags
+        renderRules();
+
+        // Main content: challenger + queue
+        const challenger = queue.find(e => e.position === 2);
+        const waiting = queue.filter(e => e.position >= 3).sort((a, b) => a.position - b.position);
+
+        let html = '';
+
+        // Challenger card
+        if (challenger) {
+            const partnerStr = challenger.partner_name ? ` & ${esc(challenger.partner_name)}` : '';
+            html += `<div class="challenger-card swipeable" data-role="challenger">
+                <div class="name-row">
+                    <span class="pos">2</span>
+                    <span class="name">${esc(challenger.player_name)}${partnerStr}</span>
+                </div>
+                <div class="hint">← swipe if lost →</div>
+            </div>`;
+        }
+
+        // Queue items
+        for (const entry of waiting) {
+            const isGhosted = entry.status === 'ghosted';
+            const needsConfirm = (entry.position === 3 || entry.position === 4) && entry.confirmation_sent_at && entry.status !== 'confirmed';
+            let classes = 'queue-item';
+            if (isGhosted) classes += ' ghosted';
+            else if (needsConfirm) classes += ' needs-confirm';
+
+            let confirmHtml = '';
+            if (entry.position === 3 || entry.position === 4) {
+                if (entry.status === 'confirmed') {
+                    confirmHtml = '<span class="confirm-status confirmed">✓ Ready</span>';
+                } else if (isGhosted) {
+                    confirmHtml = '<span class="confirm-status" style="color:#ef4444;background:rgba(239,68,68,0.15)">👻 Gone</span>';
+                } else if (entry.confirmation_sent_at) {
+                    confirmHtml = '<span class="confirm-status">⏳ Waiting</span>';
+                }
+            }
+
+            const partnerStr = entry.partner_name ? ` & ${esc(entry.partner_name)}` : '';
+            html += `<div class="${classes}">
+                <span class="pos">${entry.position}</span>
+                <span class="name">${esc(entry.player_name)}${partnerStr}</span>
+                ${confirmHtml}
+            </div>`;
+        }
+
+        // Only update DOM if content actually changed (prevents blink)
+        if (mainEl.dataset.lastHtml !== html) {
+            mainEl.innerHTML = html;
+            mainEl.dataset.lastHtml = html;
+            // Re-attach swipe handlers only to new challenger card (not king header)
+            attachSwipeHandlers(mainEl);
+        }
+    }
+
+    function renderRules() {
+        if (!session) return;
+        const gt = session.game_type === 'doubles' ? 'Doubles' : 'Singles';
+        const rt = session.rule_type === 'apa' ? 'APA' : session.rule_type === 'bca' ? 'BCA' : 'Bar Rules';
+        document.getElementById('tagGameType').textContent = gt;
+        document.getElementById('tagRuleType').textContent = rt;
+    }
+
+    // ============================================
+    // Swipe handling (matches old version exactly)
+    // ============================================
+    let startX, currentEl;
+    const THRESHOLD = 60;
+
+    function attachSwipeHandlers(container) {
+        const root = container || document;
+        root.querySelectorAll('.swipeable').forEach(el => {
+            // Touch events
+            el.addEventListener('touchstart', e => {
+                startX = e.touches[0].clientX;
+                currentEl = e.currentTarget;
+                currentEl.classList.add('swiping');
+            }, { passive: true });
+
+            el.addEventListener('touchmove', e => {
+                if (!currentEl) return;
+                e.preventDefault();
+                const diffX = e.touches[0].clientX - startX;
+                currentEl.style.transform = `translateX(${diffX}px)`;
+                currentEl.style.opacity = Math.max(0.4, 1 - Math.abs(diffX) / 250);
+                currentEl.classList.toggle('swipe-left', diffX < -30);
+                currentEl.classList.toggle('swipe-right', diffX > 30);
+            }, { passive: false });
+
+            el.addEventListener('touchend', e => {
+                if (!currentEl) return;
+                handleSwipe(e.changedTouches[0].clientX - startX);
+            });
+
+            // Mouse events (for desktop testing)
+            el.addEventListener('mousedown', e => {
+                startX = e.clientX;
+                currentEl = e.currentTarget;
+                currentEl.classList.add('swiping');
+                document.addEventListener('mousemove', onMouseMove);
+                document.addEventListener('mouseup', onMouseUp);
+            });
+        });
+    }
+
+    function onMouseMove(e) {
+        if (!currentEl) return;
+        const diffX = e.clientX - startX;
+        currentEl.style.transform = `translateX(${diffX}px)`;
+        currentEl.style.opacity = Math.max(0.4, 1 - Math.abs(diffX) / 250);
+        currentEl.classList.toggle('swipe-left', diffX < -30);
+        currentEl.classList.toggle('swipe-right', diffX > 30);
+    }
+
+    function onMouseUp(e) {
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+        if (currentEl) handleSwipe(e.clientX - startX);
+    }
+
+    function handleSwipe(diffX) {
+        if (!currentEl) return;
+        currentEl.classList.remove('swiping', 'swipe-left', 'swipe-right');
+
+        if (Math.abs(diffX) > THRESHOLD) {
+            const role = currentEl.dataset.role;
+            // Swiping king off = challenger wins, swiping challenger off = king wins
+            const result = role === 'challenger' ? 'king-wins' : 'challenger-wins';
+            const loserName = role === 'challenger'
+                ? (queue.find(e => e.position === 2)?.player_name || '?')
+                : (queue.find(e => e.position === 1)?.player_name || '?');
+
+            // Animate off screen
+            currentEl.style.transform = `translateX(${diffX < 0 ? '-100vw' : '100vw'})`;
+            currentEl.style.opacity = '0';
+
+            // Show confirm
+            pendingAction = { type: 'result', result };
+            document.getElementById('confirmMessage').textContent = `Remove ${loserName}?`;
+            document.getElementById('confirmOverlay').classList.add('show');
+        } else {
+            // Snap back
+            currentEl.style.transform = '';
+            currentEl.style.opacity = '';
+        }
+        currentEl = null;
+    }
+
+    function hideConfirm() {
+        document.getElementById('confirmOverlay').classList.remove('show');
+        pendingAction = null;
+        // Re-render to reset visuals
+        render();
+    }
+
+    async function executeConfirm() {
+        document.getElementById('confirmOverlay').classList.remove('show');
+        if (!pendingAction) return;
+
+        if (pendingAction.type === 'result') {
+            try {
+                await fetch('/api/result', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tableCode: TABLE_CODE, result: pendingAction.result })
+                });
+            } catch (err) {
+                console.error('Result API error:', err);
+            }
+        } else if (pendingAction.type === 'undo') {
+            try {
+                const res = await fetch('/api/undo', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tableCode: TABLE_CODE, pin: pendingAction.pin })
+                });
+                const data = await res.json();
+                if (data.error) console.log('Undo rejected:', data.error);
+            } catch (err) {
+                console.error('Undo API error:', err);
+            }
+        }
+        pendingAction = null;
+    }
+
+    function doUndo() {
+        const enteredPin = prompt('Enter PIN to undo:');
+        if (!enteredPin) return;
+        pendingAction = { type: 'undo', pin: enteredPin };
+        document.getElementById('confirmMessage').textContent = 'Undo last removal?';
+        document.getElementById('confirmOverlay').classList.add('show');
+    }
+
+    // Attach swipe to the king section in the header
+    attachSwipeHandlers();
+
+    init();
+    </script>
+</body>
+</html>

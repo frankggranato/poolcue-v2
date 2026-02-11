@@ -1,0 +1,19 @@
+{
+  "name": "poolcue-v2",
+  "version": "1.0.0",
+  "description": "Digital pool queue for bars",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "ws": "^8.16.0",
+    "pg": "^8.13.0",
+    "dotenv": "^16.3.1",
+    "qrcode": "^1.5.3",
+    "cookie-parser": "^1.4.6",
+    "uuid": "^9.0.0"
+  }
+}

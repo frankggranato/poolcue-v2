@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Pool Cue — Join</title>
+  <link rel="stylesheet" href="/style.css">
+  <style>
+    .join-hero {
+      text-align: center;
+      padding: 24px 0 8px;
+    }
+    .join-hero .icon { font-size: 2.5rem; }
+    .join-hero h2 { font-size: 1.3rem; font-weight: 700; margin-top: 8px; }
+    .join-hero .sub { color: var(--dim); font-size: 0.85rem; margin-top: 4px; }
+    .name-row {
+      display: flex;
+      gap: 8px;
+    }
+    .name-row .input { flex: 1; margin-bottom: 0; }
+    .name-row .btn { width: auto; white-space: nowrap; }
+    .suggest-btn {
+      padding: 16px 14px;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--accent);
+      font-weight: 600;
+      font-size: 0.85rem;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .queue-preview { margin-top: 24px; }
+    .queue-preview h3 {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--muted);
+      font-weight: 600;
+      margin-bottom: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="logo">
+      <span class="logo-mark">🎱</span>
+      Pool Cue
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="join-hero">
+      <div class="icon">🎱</div>
+      <h2 id="heroTitle">Join the Queue</h2>
+      <div class="sub" id="heroSub"></div>
+    </div>
+
+    <!-- Already in queue message -->
+    <div id="alreadyInQueue" class="hidden">
+      <div class="card card-accent" style="text-align:center;">
+        <p style="font-weight:600;margin-bottom:12px;">You're already in the queue</p>
+        <a id="goToStatus" href="#" class="btn btn-accent" style="text-decoration:none;display:block;margin-bottom:10px;">View Your Status</a>
+        <button class="btn btn-danger" style="font-size:0.9rem;padding:12px;" onclick="leaveFromJoin()">Leave Queue</button>
+      </div>
+    </div>
+
+    <!-- Join form -->
+    <div id="joinForm">
+      <label class="label">Your Name</label>
+      <div class="name-row" style="margin-bottom:16px;">
+        <input type="text" id="nameInput" class="input" placeholder="Enter your name" maxlength="24" autocomplete="off">
+        <button class="suggest-btn" onclick="suggestName()">🎲</button>
+      </div>
+
+      <div id="partnerSection" class="hidden">
+        <label class="label">Partner's Name</label>
+        <input type="text" id="partnerInput" class="input" placeholder="Partner's name (optional)" maxlength="24" autocomplete="off">
+      </div>
+
+      <button class="btn btn-accent" id="joinBtn" onclick="joinQueue()">Join Queue</button>
+
+      <div id="errorMsg" class="hidden" style="text-align:center;color:var(--danger);font-size:0.85rem;margin-top:12px;"></div>
+    </div>
+
+    <!-- Queue preview -->
+    <div class="queue-preview" id="queuePreview">
+      <h3>Current Queue</h3>
+      <div class="queue-list" id="previewList"></div>
+      <div id="emptyQueue" class="text-center text-dim text-sm" style="padding:24px;">No one in queue yet — be the first!</div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+
+<script>
+const TABLE_CODE = window.location.pathname.split('/').pop();
+
+// XSS protection
+function esc(str) {
+  if (!str) return '';
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+// Pre-fill name from localStorage
+const savedName = localStorage.getItem('poolcue_name');
+if (savedName) document.getElementById('nameInput').value = savedName;
+
+// Load queue state
+async function loadQueue() {
+  try {
+    const res = await fetch(`/api/queue/${TABLE_CODE}`);
+    const data = await res.json();
+
+    // Check if already in queue
+    if (data.my_entry) {
+      document.getElementById('joinForm').classList.add('hidden');
+      document.getElementById('alreadyInQueue').classList.remove('hidden');
+      document.getElementById('goToStatus').href = `/status/${TABLE_CODE}`;
+    }
+
+    // Show doubles partner field if needed
+    if (data.session?.game_type === 'doubles') {
+      document.getElementById('partnerSection').classList.remove('hidden');
+    }
+
+    // Queue count in hero
+    const count = data.queue?.length || 0;
+    document.getElementById('heroSub').textContent = count > 0
+      ? `${count} player${count !== 1 ? 's' : ''} in queue`
+      : 'No wait — table is open';
+
+    // Render preview
+    renderPreview(data.queue || []);
+  } catch (err) {
+    console.error('Load error:', err);
+  }
+}
+
+let lastPreviewHtml = '';
+
+function renderPreview(queue) {
+  const list = document.getElementById('previewList');
+  const empty = document.getElementById('emptyQueue');
+
+  if (queue.length === 0) {
+    list.style.display = 'none';
+    empty.style.display = 'block';
+    return;
+  }
+
+  empty.style.display = 'none';
+  list.style.display = 'block';
+
+  let newHtml = queue.slice(0, 10).map(e => {
+    let posClass = '';
+    let icon = '';
+    if (e.position === 1) { posClass = 'king'; icon = '👑'; }
+    else if (e.position === 2) { posClass = 'challenger'; icon = '⚔️'; }
+    else if (e.position === 3) { posClass = 'next-up'; }
+    const partner = e.partner_name ? ` & ${esc(e.partner_name)}` : '';
+    const wins = e.win_streak > 0 ? `<span class="queue-wins">🔥 ${e.win_streak}</span>` : '';
+    return `<div class="queue-item">
+      <div class="queue-pos ${posClass}">${icon || e.position}</div>
+      <div class="queue-name">${esc(e.player_name)}${partner}</div>
+      ${wins}
+    </div>`;
+  }).join('');
+
+  if (queue.length > 10) {
+    newHtml += `<div class="queue-item" style="justify-content:center;color:var(--muted);font-size:0.85rem;">+${queue.length - 10} more</div>`;
+  }
+
+  if (newHtml !== lastPreviewHtml) {
+    list.innerHTML = newHtml;
+    lastPreviewHtml = newHtml;
+  }
+}
+
+async function joinQueue() {
+  const name = document.getElementById('nameInput').value.trim();
+  const partner = document.getElementById('partnerInput')?.value.trim() || '';
+  const btn = document.getElementById('joinBtn');
+  const errorEl = document.getElementById('errorMsg');
+
+  if (!name) {
+    errorEl.textContent = 'Enter a name to join';
+    errorEl.classList.remove('hidden');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Joining...';
+  errorEl.classList.add('hidden');
+
+  try {
+    const res = await fetch('/api/join', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tableCode: TABLE_CODE,
+        playerName: name,
+        partnerName: partner || undefined
+      })
+    });
+    const data = await res.json();
+
+    if (data.error === 'already_in_queue') {
+      errorEl.textContent = 'You\'re already in the queue';
+      errorEl.classList.remove('hidden');
+      btn.disabled = false;
+      btn.textContent = 'Join Queue';
+      return;
+    }
+
+    if (data.error) {
+      errorEl.textContent = data.error;
+      errorEl.classList.remove('hidden');
+      btn.disabled = false;
+      btn.textContent = 'Join Queue';
+      return;
+    }
+
+    // Save name for next time
+    localStorage.setItem('poolcue_name', name);
+
+    // Redirect to status page
+    window.location.href = `/status/${TABLE_CODE}`;
+  } catch (err) {
+    errorEl.textContent = 'Connection error — try again';
+    errorEl.classList.remove('hidden');
+    btn.disabled = false;
+    btn.textContent = 'Join Queue';
+  }
+}
+
+async function suggestName() {
+  try {
+    const res = await fetch('/api/suggest-name');
+    const data = await res.json();
+    document.getElementById('nameInput').value = data.name;
+  } catch (err) {
+    document.getElementById('nameInput').value = 'Fast Eddie';
+  }
+}
+
+async function leaveFromJoin() {
+  if (!confirm('Leave the queue?')) return;
+  try {
+    await fetch('/api/leave', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tableCode: TABLE_CODE })
+    });
+    document.getElementById('alreadyInQueue').classList.add('hidden');
+    document.getElementById('joinForm').classList.remove('hidden');
+    loadQueue();
+  } catch (err) {
+    alert('Error — try again');
+  }
+}
+
+// Enter key submits
+document.getElementById('nameInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') joinQueue();
+});
+
+// WebSocket for live queue preview
+function connectPreviewWS() {
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  const ws = new WebSocket(`${proto}://${location.host}/ws?table=${TABLE_CODE}`);
+  ws.onmessage = (e) => {
+    const data = JSON.parse(e.data);
+    if (data.type === 'queue_update') {
+      renderPreview(data.queue || []);
+      const count = data.queue?.length || 0;
+      document.getElementById('heroSub').textContent = count > 0
+        ? `${count} player${count !== 1 ? 's' : ''} in queue`
+        : 'No wait — table is open';
+    }
+  };
+  ws.onclose = () => setTimeout(connectPreviewWS, 3000);
+  ws.onerror = () => ws.close();
+  // Re-fetch on reconnect
+  ws.onopen = () => { loadQueue(); };
+}
+
+loadQueue();
+connectPreviewWS();
+</script>
+</body>
+</html>

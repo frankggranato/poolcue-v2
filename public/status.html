@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Pool Cue — Status</title>
+  <link rel="stylesheet" href="/style.css">
+  <style>
+    .position-hero {
+      text-align: center;
+      padding: 20px 0;
+    }
+    .position-number {
+      font-size: 3.5rem;
+      font-weight: 900;
+      line-height: 1;
+    }
+    .position-number.king { color: var(--accent); }
+    .position-number.challenger { color: var(--danger); }
+    .position-number.next { color: var(--green); }
+    .role-label {
+      display: inline-flex;
+      padding: 4px 14px;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-top: 8px;
+    }
+    .role-label.king { background: rgba(245,197,24,0.15); color: var(--accent); }
+    .role-label.challenger { background: rgba(239,68,68,0.15); color: var(--danger); }
+    .role-label.next { background: rgba(34,197,94,0.15); color: var(--green); }
+    .role-label.waiting { background: rgba(255,255,255,0.06); color: var(--dim); }
+
+    .wait-estimate {
+      color: var(--dim);
+      font-size: 0.85rem;
+      margin-top: 8px;
+    }
+
+    /* Big confirm button */
+    .confirm-section {
+      margin: 16px 0;
+    }
+    .confirm-big {
+      width: 100%;
+      padding: 28px 24px;
+      border: none;
+      border-radius: 16px;
+      font-size: 1.1rem;
+      font-weight: 800;
+      cursor: pointer;
+      font-family: inherit;
+      position: relative;
+      overflow: hidden;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .confirm-big.active {
+      background: linear-gradient(135deg, #22c55e, #16a34a);
+      color: white;
+      box-shadow: 0 0 0 0 rgba(34,197,94,0.5), 0 8px 24px rgba(34,197,94,0.3);
+      animation: confirmPulse 1.8s ease-in-out infinite;
+    }
+    .confirm-big.active::before {
+      content: '';
+      position: absolute;
+      top: -50%; left: -50%;
+      width: 200%; height: 200%;
+      background: radial-gradient(circle, rgba(255,255,255,0.15) 0%, transparent 60%);
+      animation: confirmShine 2.5s ease-in-out infinite;
+    }
+    .confirm-big.confirmed {
+      background: rgba(34,197,94,0.12);
+      border: 2px solid rgba(34,197,94,0.25);
+      color: var(--green);
+      animation: none;
+      cursor: default;
+      font-size: 1rem;
+      padding: 20px 24px;
+      letter-spacing: 0.5px;
+    }
+    .confirm-big.ghosted {
+      background: linear-gradient(135deg, #ef4444, #dc2626);
+      color: white;
+      box-shadow: 0 0 0 0 rgba(239,68,68,0.5), 0 8px 24px rgba(239,68,68,0.3);
+      animation: ghostPulse 1s ease-in-out infinite;
+    }
+    @keyframes confirmPulse {
+      0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(34,197,94,0.5), 0 8px 24px rgba(34,197,94,0.3); }
+      50% { transform: scale(1.02); box-shadow: 0 0 0 14px rgba(34,197,94,0), 0 8px 24px rgba(34,197,94,0.2); }
+    }
+    @keyframes ghostPulse {
+      0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239,68,68,0.5); }
+      50% { transform: scale(1.03); box-shadow: 0 0 0 16px rgba(239,68,68,0); }
+    }
+    @keyframes confirmShine {
+      0%, 100% { transform: translate(-10%, -10%) rotate(0deg); opacity: 0; }
+      50% { transform: translate(10%, 10%) rotate(180deg); opacity: 1; }
+    }
+
+    /* Shot caller controls */
+    .controls-section { margin-top: 16px; }
+    .controls-section h3 {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--muted);
+      font-weight: 600;
+      margin-bottom: 10px;
+    }
+    .result-btns {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    .result-btn {
+      flex: 1;
+      padding: 16px;
+      border-radius: 12px;
+      font-size: 0.95rem;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: inherit;
+      border: none;
+      transition: opacity 0.15s, transform 0.1s;
+    }
+    .result-btn:active:not(:disabled) { transform: scale(0.97); }
+    .result-btn:disabled { cursor: not-allowed; }
+    .result-btn.win {
+      background: rgba(245,197,24,0.15);
+      border: 2px solid rgba(245,197,24,0.3);
+      color: var(--accent);
+    }
+    .result-btn.lose {
+      background: rgba(239,68,68,0.15);
+      border: 2px solid rgba(239,68,68,0.3);
+      color: var(--danger);
+    }
+    .rule-toggle {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .rule-opt {
+      flex: 1;
+      padding: 10px;
+      border-radius: 8px;
+      text-align: center;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      color: var(--dim);
+      font-family: inherit;
+    }
+    .rule-opt.active {
+      background: rgba(245,197,24,0.12);
+      border-color: rgba(245,197,24,0.3);
+      color: var(--accent);
+    }
+
+    /* Ghost warning */
+    .ghost-warning {
+      padding: 16px;
+      border-radius: 12px;
+      background: rgba(239,68,68,0.1);
+      border: 1px solid rgba(239,68,68,0.3);
+      text-align: center;
+      margin: 16px 0;
+    }
+    .ghost-warning .timer { font-size: 1.5rem; font-weight: 800; color: var(--danger); }
+
+    /* Removed message */
+    .removed-msg {
+      text-align: center;
+      padding: 40px 20px;
+    }
+    .removed-msg .icon { font-size: 3rem; margin-bottom: 12px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="logo">
+      <span class="logo-mark">🎱</span>
+      Pool Cue
+    </div>
+  </div>
+
+  <div class="container">
+    <!-- Position hero -->
+    <div class="position-hero" id="positionHero">
+      <div class="position-number" id="posNumber">#—</div>
+      <div><span class="role-label waiting" id="roleLabel">Loading...</span></div>
+      <div class="wait-estimate" id="waitEstimate"></div>
+    </div>
+
+    <!-- Confirm section (positions 3-4) -->
+    <div class="confirm-section hidden" id="confirmSection">
+      <button class="confirm-big active" id="confirmBtn" onclick="confirmPresence()">✋ TAP TO CONFIRM</button>
+    </div>
+
+    <!-- Ghost warning -->
+    <div class="ghost-warning hidden" id="ghostWarning">
+      <p style="color:var(--danger);font-weight:600;margin-bottom:4px;">⚠️ Confirm now or you'll be removed</p>
+      <div class="timer" id="ghostTimer">2:00</div>
+    </div>
+
+    <!-- Shot caller controls (position 1 only) -->
+    <div class="controls-section hidden" id="shotCallerControls">
+      <h3>Game Controls</h3>
+      <div class="result-btns">
+        <button class="result-btn win" onclick="recordResult('king-wins')">🏆 I Won</button>
+        <button class="result-btn lose" onclick="recordResult('challenger-wins')">💀 They Won</button>
+      </div>
+
+      <h3>Game Type</h3>
+      <div class="rule-toggle" id="gameTypeToggle">
+        <button class="rule-opt" data-val="singles" onclick="setGameType('singles')">Singles</button>
+        <button class="rule-opt" data-val="doubles" onclick="setGameType('doubles')">Doubles</button>
+      </div>
+
+      <h3>Rules</h3>
+      <div class="rule-toggle" id="ruleTypeToggle">
+        <button class="rule-opt" data-val="bar_rules" onclick="setRuleType('bar_rules')">Bar Rules</button>
+        <button class="rule-opt" data-val="apa" onclick="setRuleType('apa')">APA</button>
+        <button class="rule-opt" data-val="bca" onclick="setRuleType('bca')">BCA</button>
+      </div>
+    </div>
+
+    <!-- Queue preview -->
+    <div class="queue-preview mt-24" id="queuePreview">
+      <h3 style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.5px;color:var(--muted);font-weight:600;margin-bottom:10px;">Queue</h3>
+      <div class="queue-list" id="queueList"></div>
+    </div>
+
+    <!-- Leave queue -->
+    <div class="mt-24" id="leaveSection" style="padding-bottom:24px;">
+      <button class="btn btn-danger" onclick="leaveQueue()" style="font-size:0.95rem;">Leave Queue</button>
+    </div>
+
+    <!-- Removed state -->
+    <div class="removed-msg hidden" id="removedMsg">
+      <div class="icon">👋</div>
+      <h2>You've been removed</h2>
+      <p class="text-dim" style="margin:8px 0 20px;">You missed the confirmation window.</p>
+      <a href="" id="rejoinLink" class="btn btn-accent" style="text-decoration:none;display:block;">Rejoin Queue</a>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+<script>
+const TABLE_CODE = window.location.pathname.split('/').pop();
+let myEntry = null;
+let queue = [];
+let session = null;
+let avgGameSeconds = null;
+let ghostInterval = null;
+let lastStateHash = '';
+let lastQueueHtml = '';
+
+function stateHash() {
+  const me = myEntry ? `${myEntry.position}|${myEntry.status}|${myEntry.win_streak}|${!!myEntry.confirmation_sent_at}` : 'none';
+  const q = queue.map(e => `${e.position}:${e.player_name}:${e.status}:${e.win_streak}`).join(',');
+  const s = session ? `${session.game_type}|${session.rule_type}|${session.status}` : 'none';
+  return `${me}||${q}||${s}`;
+}
+
+async function loadState() {
+  try {
+    const res = await fetch(`/api/queue/${TABLE_CODE}`);
+    const data = await res.json();
+    queue = data.queue || [];
+    session = data.session;
+    avgGameSeconds = data.avg_game_seconds;
+    myEntry = data.my_entry;
+    render();
+  } catch (err) {
+    console.error('Load error:', err);
+  }
+}
+
+function render() {
+  const hash = stateHash();
+  if (hash === lastStateHash) return;
+  lastStateHash = hash;
+
+  // Not in queue anymore?
+  if (!myEntry) {
+    document.getElementById('positionHero').classList.add('hidden');
+    document.getElementById('confirmSection').classList.add('hidden');
+    document.getElementById('ghostWarning').classList.add('hidden');
+    document.getElementById('shotCallerControls').classList.add('hidden');
+    document.getElementById('queuePreview').classList.add('hidden');
+    document.getElementById('leaveSection').classList.add('hidden');
+    document.getElementById('removedMsg').classList.remove('hidden');
+    document.getElementById('rejoinLink').href = `/join/${TABLE_CODE}`;
+    return;
+  }
+
+  document.getElementById('removedMsg').classList.add('hidden');
+  document.getElementById('positionHero').classList.remove('hidden');
+  document.getElementById('queuePreview').classList.remove('hidden');
+  document.getElementById('leaveSection').classList.remove('hidden');
+
+  const pos = myEntry.position;
+  const posEl = document.getElementById('posNumber');
+  const roleEl = document.getElementById('roleLabel');
+  const waitEl = document.getElementById('waitEstimate');
+
+  // Position display
+  if (pos === 1) {
+    posEl.textContent = '👑';
+    posEl.className = 'position-number king';
+    roleEl.textContent = 'Shot Caller';
+    roleEl.className = 'role-label king';
+    waitEl.textContent = 'You\'re on the table';
+  } else if (pos === 2) {
+    posEl.textContent = '⚔️';
+    posEl.className = 'position-number challenger';
+    roleEl.textContent = 'Challenger';
+    roleEl.className = 'role-label challenger';
+    waitEl.textContent = 'You\'re up — get to the table';
+  } else if (pos === 3) {
+    posEl.textContent = '#3';
+    posEl.className = 'position-number next';
+    roleEl.textContent = 'Next Up';
+    roleEl.className = 'role-label next';
+    waitEl.textContent = estimateWait(pos);
+  } else {
+    posEl.textContent = `#${pos}`;
+    posEl.className = 'position-number';
+    roleEl.textContent = 'In Queue';
+    roleEl.className = 'role-label waiting';
+    waitEl.textContent = estimateWait(pos);
+  }
+
+  // Confirmation section
+  const confirmSection = document.getElementById('confirmSection');
+  const confirmBtn = document.getElementById('confirmBtn');
+  const ghostWarning = document.getElementById('ghostWarning');
+
+  if ((pos === 3 || pos === 4) && myEntry.confirmation_sent_at) {
+    if (myEntry.status === 'confirmed') {
+      confirmSection.classList.remove('hidden');
+      confirmBtn.textContent = '✓ You\'re locked in';
+      confirmBtn.className = 'confirm-big confirmed';
+      confirmBtn.disabled = true;
+      ghostWarning.classList.add('hidden');
+      stopGhostTimer();
+    } else if (myEntry.status === 'ghosted') {
+      confirmSection.classList.remove('hidden');
+      confirmBtn.textContent = '🚨 TAP NOW — CONFIRM YOU\'RE HERE';
+      confirmBtn.className = 'confirm-big ghosted';
+      confirmBtn.disabled = false;
+      ghostWarning.classList.remove('hidden');
+      startGhostTimer();
+    } else {
+      // Waiting for confirmation
+      confirmSection.classList.remove('hidden');
+      confirmBtn.textContent = '✋ TAP TO CONFIRM';
+      confirmBtn.className = 'confirm-big active';
+      confirmBtn.disabled = false;
+      ghostWarning.classList.add('hidden');
+      stopGhostTimer();
+      // Vibrate if supported
+      if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+    }
+  } else {
+    confirmSection.classList.add('hidden');
+    ghostWarning.classList.add('hidden');
+    stopGhostTimer();
+  }
+
+  // Shot caller controls — show for position 1 always
+  const controls = document.getElementById('shotCallerControls');
+  if (pos === 1) {
+    controls.classList.remove('hidden');
+    // Disable result buttons if no challenger yet
+    const resultBtns = controls.querySelectorAll('.result-btn');
+    const hasChallenger = queue.length >= 2;
+    resultBtns.forEach(btn => {
+      btn.disabled = !hasChallenger;
+      btn.style.opacity = hasChallenger ? '1' : '0.35';
+    });
+    // Update toggle states
+    document.querySelectorAll('#gameTypeToggle .rule-opt').forEach(el => {
+      el.classList.toggle('active', el.dataset.val === session?.game_type);
+    });
+    document.querySelectorAll('#ruleTypeToggle .rule-opt').forEach(el => {
+      el.classList.toggle('active', el.dataset.val === session?.rule_type);
+    });
+  } else {
+    controls.classList.add('hidden');
+  }
+
+  // Queue list
+  renderQueue();
+}
+
+function estimateWait(pos) {
+  if (!avgGameSeconds || avgGameSeconds <= 0) return '';
+  const gamesAhead = pos - 2;
+  const mins = Math.round((gamesAhead * avgGameSeconds) / 60);
+  if (mins <= 0) return '';
+  return `~${mins} min wait`;
+}
+
+function renderQueue() {
+  const list = document.getElementById('queueList');
+  const html = queue.map(e => {
+    let posClass = '';
+    let icon = '';
+    if (e.position === 1) { posClass = 'king'; icon = '👑'; }
+    else if (e.position === 2) { posClass = 'challenger'; icon = '⚔️'; }
+    else if (e.position === 3) { posClass = 'next-up'; }
+    const isMe = myEntry && e.phone_id === myEntry.phone_id;
+    const partner = e.partner_name ? ` & ${esc(e.partner_name)}` : '';
+    const wins = e.win_streak > 0 ? `<span class="queue-wins">🔥 ${e.win_streak}</span>` : '';
+    return `<div class="queue-item${isMe ? ' is-me' : ''}">
+      <div class="queue-pos ${posClass}">${icon || e.position}</div>
+      <div class="queue-name">${esc(e.player_name)}${partner}${isMe ? ' <span style="color:var(--accent);font-size:0.75rem;">(you)</span>' : ''}</div>
+      ${wins}
+    </div>`;
+  }).join('');
+  if (html !== lastQueueHtml) {
+    list.innerHTML = html;
+    lastQueueHtml = html;
+  }
+}
+
+// Ghost countdown timer
+function startGhostTimer() {
+  if (ghostInterval) return;
+  ghostInterval = setInterval(() => {
+    if (!myEntry?.ghosted_at) return;
+    const elapsed = (Date.now() - new Date(myEntry.ghosted_at).getTime()) / 1000;
+    const remaining = Math.max(0, 120 - elapsed); // 2 min from ghost to removal
+    const mins = Math.floor(remaining / 60);
+    const secs = Math.floor(remaining % 60);
+    document.getElementById('ghostTimer').textContent = `${mins}:${String(secs).padStart(2, '0')}`;
+    if (remaining <= 0) {
+      stopGhostTimer();
+      loadState(); // Refresh to check if removed
+    }
+  }, 1000);
+}
+
+function stopGhostTimer() {
+  if (ghostInterval) { clearInterval(ghostInterval); ghostInterval = null; }
+}
+
+// Actions
+async function confirmPresence() {
+  try {
+    const res = await fetch('/api/confirm', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tableCode: TABLE_CODE })
+    });
+    const data = await res.json();
+    if (data.success) {
+      showToast('Confirmed! ✓', 'success');
+    }
+  } catch (err) {
+    showToast('Error — try again', 'error');
+  }
+}
+
+let resultPending = false;
+
+async function recordResult(result) {
+  if (resultPending) return;
+  resultPending = true;
+  // Disable buttons immediately
+  document.querySelectorAll('.result-btn').forEach(b => { b.disabled = true; b.style.opacity = '0.35'; });
+  try {
+    const res = await fetch('/api/result', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tableCode: TABLE_CODE, result })
+    });
+    const data = await res.json();
+    if (data.success) {
+      showToast(result === 'king-wins' ? '🏆 Winner!' : 'New challenger on the table', 'info');
+    }
+  } catch (err) {
+    showToast('Error — try again', 'error');
+  } finally {
+    // Re-enable after short delay to prevent double-tap
+    setTimeout(() => { resultPending = false; }, 1500);
+  }
+}
+
+async function setGameType(type) {
+  try {
+    await fetch('/api/rules', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tableCode: TABLE_CODE, gameType: type })
+    });
+  } catch (err) { console.error(err); }
+}
+
+async function setRuleType(type) {
+  try {
+    await fetch('/api/rules', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tableCode: TABLE_CODE, ruleType: type })
+    });
+  } catch (err) { console.error(err); }
+}
+
+async function leaveQueue() {
+  if (!confirm('Leave the queue?')) return;
+  try {
+    await fetch('/api/leave', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tableCode: TABLE_CODE })
+    });
+    window.location.href = `/join/${TABLE_CODE}`;
+  } catch (err) {
+    showToast('Error — try again', 'error');
+  }
+}
+
+function showToast(msg, type) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = `toast ${type} show`;
+  setTimeout(() => { el.classList.remove('show'); }, 2500);
+}
+
+let lastWsHash = '';
+
+// XSS protection
+function esc(str) {
+  if (!str) return '';
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+// WebSocket
+function connectWS() {
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  const ws = new WebSocket(`${proto}://${location.host}/ws?table=${TABLE_CODE}`);
+
+  ws.onmessage = (e) => {
+    const data = JSON.parse(e.data);
+    if (data.type === 'queue_update') {
+      // Skip fetch if queue data is identical
+      const wsHash = JSON.stringify(data.queue.map(e => e.id + e.position + e.status + e.win_streak));
+      if (wsHash === lastWsHash) return;
+      lastWsHash = wsHash;
+      loadState();
+    } else if (data.type === 'confirm_request' || data.type === 'player_removed' || data.type === 'player_ghosted') {
+      loadState();
+    } else if (data.type === 'session_closed') {
+      window.location.href = `/join/${TABLE_CODE}`;
+    }
+  };
+
+  ws.onclose = () => setTimeout(connectWS, 2000);
+  ws.onerror = () => ws.close();
+  // Re-fetch full state on reconnect
+  ws.onopen = () => { loadState(); };
+}
+
+loadState();
+connectWS();
+</script>
+</body>
+</html>

@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Pool Cue — Setup</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="header">
+    <div class="logo">
+      <span class="logo-mark">🎱</span>
+      Pool Cue
+    </div>
+  </div>
+
+  <div class="container">
+    <!-- PIN gate -->
+    <div id="pinGate">
+      <div style="text-align:center;padding:40px 0 24px;">
+        <div style="font-size:2.5rem;">🔒</div>
+        <h2 style="margin-top:12px;">Table Setup</h2>
+        <p class="text-dim text-sm" style="margin-top:4px;">Enter PIN to manage this table</p>
+      </div>
+      <input type="password" id="pinInput" class="input" placeholder="Enter PIN" maxlength="8" inputmode="numeric" style="text-align:center;font-size:1.3rem;letter-spacing:6px;">
+      <button class="btn btn-accent" onclick="checkPin()">Enter</button>
+      <div id="pinError" class="hidden" style="text-align:center;color:var(--danger);font-size:0.85rem;margin-top:12px;">Wrong PIN</div>
+    </div>
+
+    <!-- Setup controls (after PIN) -->
+    <div id="setupControls" class="hidden">
+      <div style="text-align:center;padding:20px 0;">
+        <h2>Table Setup</h2>
+        <p class="text-dim text-sm" style="margin-top:4px;" id="tableCodeDisplay"></p>
+      </div>
+
+      <div class="card">
+        <h3 style="font-size:0.85rem;font-weight:600;margin-bottom:12px;">Start New Session</h3>
+        <label class="label">Game Type</label>
+        <div style="display:flex;gap:8px;margin-bottom:16px;">
+          <button class="rule-opt active" id="optSingles" onclick="pickGameType('singles')" style="flex:1;padding:12px;border-radius:8px;text-align:center;font-size:0.85rem;font-weight:600;cursor:pointer;background:rgba(245,197,24,0.12);border:1px solid rgba(245,197,24,0.3);color:var(--accent);font-family:inherit;">Singles</button>
+          <button class="rule-opt" id="optDoubles" onclick="pickGameType('doubles')" style="flex:1;padding:12px;border-radius:8px;text-align:center;font-size:0.85rem;font-weight:600;cursor:pointer;background:var(--bg3);border:1px solid var(--border);color:var(--dim);font-family:inherit;">Doubles</button>
+        </div>
+        <label class="label">Rules</label>
+        <div style="display:flex;gap:8px;margin-bottom:20px;">
+          <button class="rule-opt active" id="optBarRules" onclick="pickRuleType('bar_rules')" style="flex:1;padding:12px;border-radius:8px;text-align:center;font-size:0.85rem;font-weight:600;cursor:pointer;background:rgba(245,197,24,0.12);border:1px solid rgba(245,197,24,0.3);color:var(--accent);font-family:inherit;">Bar Rules</button>
+          <button class="rule-opt" id="optAPA" onclick="pickRuleType('apa')" style="flex:1;padding:12px;border-radius:8px;text-align:center;font-size:0.85rem;font-weight:600;cursor:pointer;background:var(--bg3);border:1px solid var(--border);color:var(--dim);font-family:inherit;">APA</button>
+          <button class="rule-opt" id="optBCA" onclick="pickRuleType('bca')" style="flex:1;padding:12px;border-radius:8px;text-align:center;font-size:0.85rem;font-weight:600;cursor:pointer;background:var(--bg3);border:1px solid var(--border);color:var(--dim);font-family:inherit;">BCA</button>
+        </div>
+        <button class="btn btn-accent" onclick="startSession()">Start Session</button>
+      </div>
+
+      <div class="card" style="margin-top:16px;">
+        <button class="btn btn-danger" onclick="closeSession()">Close Current Session</button>
+        <p class="text-dim text-xs text-center mt-8">Clears the board and queue</p>
+      </div>
+
+      <div style="text-align:center;margin-top:24px;">
+        <a href="" id="boardLink" class="text-dim text-sm" style="color:var(--accent);">View Board →</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+<script>
+const TABLE_CODE = window.location.pathname.split('/').pop();
+let pin = '';
+let selectedGameType = 'singles';
+let selectedRuleType = 'bar_rules';
+
+document.getElementById('tableCodeDisplay').textContent = `Table: ${TABLE_CODE}`;
+document.getElementById('boardLink').href = `/board/${TABLE_CODE}`;
+
+function checkPin() {
+  pin = document.getElementById('pinInput').value;
+  // We'll verify on actual API call — for now just show controls
+  if (pin.length > 0) {
+    document.getElementById('pinGate').classList.add('hidden');
+    document.getElementById('setupControls').classList.remove('hidden');
+  } else {
+    document.getElementById('pinError').classList.remove('hidden');
+  }
+}
+
+document.getElementById('pinInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') checkPin();
+});
+
+function pickGameType(type) {
+  selectedGameType = type;
+  document.getElementById('optSingles').style.background = type === 'singles' ? 'rgba(245,197,24,0.12)' : 'var(--bg3)';
+  document.getElementById('optSingles').style.borderColor = type === 'singles' ? 'rgba(245,197,24,0.3)' : 'var(--border)';
+  document.getElementById('optSingles').style.color = type === 'singles' ? 'var(--accent)' : 'var(--dim)';
+  document.getElementById('optDoubles').style.background = type === 'doubles' ? 'rgba(245,197,24,0.12)' : 'var(--bg3)';
+  document.getElementById('optDoubles').style.borderColor = type === 'doubles' ? 'rgba(245,197,24,0.3)' : 'var(--border)';
+  document.getElementById('optDoubles').style.color = type === 'doubles' ? 'var(--accent)' : 'var(--dim)';
+}
+
+function pickRuleType(type) {
+  selectedRuleType = type;
+  ['bar_rules', 'apa', 'bca'].forEach(t => {
+    const el = document.getElementById('opt' + (t === 'bar_rules' ? 'BarRules' : t.toUpperCase()));
+    el.style.background = t === type ? 'rgba(245,197,24,0.12)' : 'var(--bg3)';
+    el.style.borderColor = t === type ? 'rgba(245,197,24,0.3)' : 'var(--border)';
+    el.style.color = t === type ? 'var(--accent)' : 'var(--dim)';
+  });
+}
+
+async function startSession() {
+  try {
+    const res = await fetch('/api/session/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tableCode: TABLE_CODE,
+        pin,
+        gameType: selectedGameType,
+        ruleType: selectedRuleType
+      })
+    });
+    const data = await res.json();
+    if (data.error === 'bad_pin') {
+      showToast('Wrong PIN', 'error');
+      return;
+    }
+    if (data.success) {
+      showToast('Session started!', 'success');
+    }
+  } catch (err) {
+    showToast('Error — try again', 'error');
+  }
+}
+
+async function closeSession() {
+  if (!confirm('Close the session? This clears the board and queue.')) return;
+  try {
+    const res = await fetch('/api/session/close', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tableCode: TABLE_CODE, pin })
+    });
+    const data = await res.json();
+    if (data.error === 'bad_pin') {
+      showToast('Wrong PIN', 'error');
+      return;
+    }
+    if (data.success) {
+      showToast('Session closed', 'info');
+    }
+  } catch (err) {
+    showToast('Error — try again', 'error');
+  }
+}
+
+function showToast(msg, type) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = `toast ${type} show`;
+  setTimeout(() => { el.classList.remove('show'); }, 2500);
+}
+</script>
+</body>
+</html>
