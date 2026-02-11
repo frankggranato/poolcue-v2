@@ -9,55 +9,41 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, sans-serif; background: #111; color: #fff; padding: 40px 20px; text-align: center; }
     h1 { font-size: 1.5rem; margin-bottom: 8px; }
-    p { color: #888; font-size: 0.9rem; margin-bottom: 24px; }
+    .sub { color: #888; font-size: 0.9rem; margin-bottom: 24px; }
     .step { background: #1a1a1a; border: 1px solid #333; border-radius: 12px; padding: 20px; margin-bottom: 16px; text-align: left; }
     .step-num { display: inline-block; background: #f5c518; color: #000; font-weight: 800; width: 28px; height: 28px; line-height: 28px; text-align: center; border-radius: 50%; margin-right: 10px; font-size: 0.85rem; }
     .step-title { font-weight: 600; font-size: 1rem; margin-bottom: 8px; }
-    .step-body { color: #aaa; font-size: 0.85rem; line-height: 1.5; }
-    code { background: #222; padding: 2px 6px; border-radius: 4px; color: #f5c518; font-size: 0.8rem; word-break: break-all; }
-    .big-btn { display: block; width: 100%; padding: 18px; background: #f5c518; color: #000; font-size: 1.1rem; font-weight: 700; border: none; border-radius: 12px; cursor: pointer; margin: 24px 0; }
-    .alt { color: #666; font-size: 0.75rem; margin-top: 16px; }
-    .copy-box { background: #0a0a0a; border: 1px solid #333; border-radius: 8px; padding: 12px; margin-top: 12px; position: relative; }
-    .copy-box code { display: block; font-size: 0.7rem; line-height: 1.4; white-space: pre-wrap; color: #ccc; background: none; padding: 0; }
-    .copy-btn { position: absolute; top: 8px; right: 8px; background: #333; border: none; color: #fff; padding: 4px 10px; border-radius: 4px; font-size: 0.7rem; cursor: pointer; }
+    .step-body { color: #aaa; font-size: 0.85rem; line-height: 1.6; }
+    .big-btn { display: block; width: 100%; padding: 18px; background: #f5c518; color: #000; font-size: 1.1rem; font-weight: 700; border: none; border-radius: 12px; cursor: pointer; margin: 24px 0; text-decoration: none; }
+    .tip { background: rgba(245,197,24,0.1); border: 1px solid rgba(245,197,24,0.3); border-radius: 12px; padding: 16px; margin-top: 20px; }
+    .tip-title { color: #f5c518; font-weight: 600; font-size: 0.85rem; margin-bottom: 6px; }
+    .tip-body { color: #888; font-size: 0.8rem; line-height: 1.5; }
   </style>
 </head>
 <body>
   <h1>🎱 Kiosk Setup</h1>
-  <p>Set up this stick PC to auto-launch Pool Cue on boot</p>
+  <p class="sub">3 taps, no keyboard needed</p>
 
   <div class="step">
-    <div class="step-title"><span class="step-num">1</span> Open Command Prompt as Admin</div>
-    <div class="step-body">Tap the Windows search bar, type <code>cmd</code>, then tap <strong>"Run as administrator"</strong></div>
+    <div class="step-title"><span class="step-num">1</span> Open the Board</div>
+    <div class="step-body">Tap the big button below to go to the board.</div>
   </div>
 
   <div class="step">
-    <div class="step-title"><span class="step-num">2</span> Paste this command</div>
-    <div class="step-body">Copy the command below, paste it into the black command window, and press Enter:</div>
-    <div class="copy-box">
-      <button class="copy-btn" onclick="copyCmd()">Copy</button>
-      <code id="cmdText">powershell -Command "$s=(New-Object -ComObject WScript.Shell).CreateShortcut(\"$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup\PoolCue.lnk\");$s.TargetPath='C:\Program Files\Google\Chrome\Application\chrome.exe';$s.Arguments='--kiosk --noerrdialogs --disable-translate --no-first-run --disable-infobars https://pool-cue.onrender.com/board/table1';$s.Save();powercfg /change standby-timeout-ac 0;powercfg /change monitor-timeout-ac 0;echo DONE"</code>
-    </div>
+    <div class="step-title"><span class="step-num">2</span> Go Fullscreen</div>
+    <div class="step-body">On the board, tap <strong>⛶ Fullscreen</strong> in the bottom-right corner. The browser bars disappear and you get the clean board.</div>
   </div>
 
   <div class="step">
-    <div class="step-title"><span class="step-num">3</span> Reboot</div>
-    <div class="step-body">Restart the stick PC. It will boot straight into Pool Cue fullscreen. To exit: tap the top-left corner 5 times quickly.</div>
+    <div class="step-title"><span class="step-num">3</span> Auto-Reopen on Boot</div>
+    <div class="step-body">In Chrome settings → <strong>On startup</strong> → pick <strong>"Continue where you left off"</strong>. Now when the stick PC reboots, Chrome opens right back to the board. Just tap Fullscreen again.</div>
   </div>
 
-  <button class="big-btn" onclick="copyCmd()">📋 Copy Setup Command</button>
+  <a class="big-btn" href="/board/table1">Open the Board →</a>
 
-  <div id="toast" style="display:none;position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#22c55e;color:#fff;padding:10px 24px;border-radius:8px;font-weight:600;">Copied!</div>
-
-  <script>
-    function copyCmd() {
-      const text = document.getElementById('cmdText').textContent;
-      navigator.clipboard.writeText(text).then(() => {
-        const t = document.getElementById('toast');
-        t.style.display = 'block';
-        setTimeout(() => { t.style.display = 'none'; }, 2000);
-      });
-    }
-  </script>
+  <div class="tip">
+    <div class="tip-title">💡 To Exit Fullscreen</div>
+    <div class="tip-body">Tap the top-left corner of the board 5 times quickly. It will ask you to confirm, then Chrome closes. Or tap ✕ Exit in the bottom-right.</div>
+  </div>
 </body>
 </html>

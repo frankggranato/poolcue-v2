@@ -179,6 +179,7 @@
         .footer-btn:hover { border-color: #fff; color: #fff; }
         .footer-btn.disabled { opacity: 0.3; cursor: default; }
         .undo-btn { left: 12px; }
+        .fullscreen-btn { right: 12px; }
 
         /* Confirm Dialog */
         .confirm-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.9); z-index: 100; justify-content: center; align-items: center; }
@@ -296,6 +297,7 @@
         <div class="footer">
             <button class="footer-btn undo-btn" id="undoBtn" onclick="doUndo()">↩ Undo</button>
             <span class="footer-brand">Pool Cue</span>
+            <button class="footer-btn fullscreen-btn" id="fsBtn" onclick="toggleFullscreen()">⛶ Fullscreen</button>
         </div>
     </div>
     </div>
@@ -653,6 +655,20 @@
         document.getElementById('confirmMessage').textContent = 'Undo last removal?';
         document.getElementById('confirmOverlay').classList.add('show');
     }
+
+    // Fullscreen toggle
+    function toggleFullscreen() {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => {});
+        document.getElementById('fsBtn').textContent = '✕ Exit';
+      } else {
+        document.exitFullscreen();
+        document.getElementById('fsBtn').textContent = '⛶ Fullscreen';
+      }
+    }
+    document.addEventListener('fullscreenchange', () => {
+      document.getElementById('fsBtn').textContent = document.fullscreenElement ? '✕ Exit' : '⛶ Fullscreen';
+    });
 
     // Attach swipe to the king section in the header
     attachSwipeHandlers();
