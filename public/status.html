@@ -152,6 +152,10 @@
       padding: 40px 20px;
     }
     .removed-msg .icon { font-size: 3rem; margin-bottom: 12px; }
+    @keyframes pulse-banner {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.03); opacity: 0.7; }
+    }
   </style>
 </head>
 <body>
@@ -164,8 +168,8 @@
 
   <div class="container">
     <!-- Sound unlock prompt -->
-    <div id="soundPrompt" style="background: rgba(255,255,255,0.08); border-radius: 8px; padding: 8px 12px; margin-bottom: 12px; text-align: center; font-size: 13px; color: #aaa; cursor: pointer;" onclick="this.style.display='none'">
-      🔔 Tap anywhere to enable sound alerts
+    <div id="soundPrompt" style="background: rgba(255,180,50,0.15); border: 1px solid rgba(255,180,50,0.3); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; text-align: center; font-size: 14px; color: #f0c040; cursor: pointer; font-weight: 500;" onclick="unlockAudio()">
+      🔔 Tap here to enable sound alerts
     </div>
 
     <!-- Position hero -->
@@ -238,8 +242,22 @@ let lastConfirmState = null; // null | 'asked' | 'confirmed' | 'ghosted'
 
 // Alert sound using Web Audio API — works without external files
 let audioCtx = null;
+let pendingAlert = null; // Queued alert type if audio not yet unlocked
 function playAlertTone(type) {
   try {
+    if (!audioUnlocked) {
+      // Audio not yet unlocked — queue it for when user taps
+      pendingAlert = type;
+      // Pulse the banner to get attention
+      const prompt = document.getElementById('soundPrompt');
+      if (prompt) {
+        prompt.style.display = '';
+        prompt.style.animation = 'none';
+        prompt.offsetHeight; // trigger reflow
+        prompt.style.animation = 'pulse-banner 0.6s ease 3';
+      }
+      return;
+    }
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     if (audioCtx.state === 'suspended') audioCtx.resume();
 
@@ -303,6 +321,10 @@ function unlockAudio() {
     audioUnlocked = true;
     const prompt = document.getElementById('soundPrompt');
     if (prompt) prompt.style.display = 'none';
+    // Replay any alert that fired before unlock
+    if (pendingAlert) {
+      setTimeout(() => { playAlertTone(pendingAlert); pendingAlert = null; }, 200);
+    }
   } catch (_) {}
 }
 document.addEventListener('touchstart', unlockAudio, { once: false });
