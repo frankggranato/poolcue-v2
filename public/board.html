@@ -162,6 +162,8 @@
         .queue-item .confirm-status.confirmed { color: #22c55e; background: rgba(34,197,94,0.15); }
         .queue-item.needs-confirm { border-left: 2px solid #eab308; }
         .queue-item.needs-confirm .confirm-status { color: #eab308; background: rgba(234,179,8,0.15); }
+        .queue-item.mia { opacity: 0.6; border-left: 2px solid #f97316; }
+        .queue-item.mia .confirm-status { color: #f97316; background: rgba(249,115,22,0.15); }
         .queue-item.ghosted { opacity: 0.4; border-left: 2px solid #ef4444; }
         .queue-item.ghosted .confirm-status { color: #ef4444; background: rgba(239,68,68,0.15); }
 
@@ -569,10 +571,21 @@
         // Challenger card
         if (challenger) {
             const partnerStr = challenger.partner_name ? ` & ${esc(challenger.partner_name)}` : '';
+            let chalStatusHtml = '';
+            if (challenger.status === 'confirmed') {
+                chalStatusHtml = '<span class="confirm-status confirmed">✓ Here</span>';
+            } else if (challenger.status === 'ghosted') {
+                chalStatusHtml = '<span class="confirm-status" style="color:#ef4444;background:rgba(239,68,68,0.15)">🔴 Probably left</span>';
+            } else if (challenger.status === 'mia') {
+                chalStatusHtml = '<span class="confirm-status" style="color:#f97316;background:rgba(249,115,22,0.15)">🟠 MIA</span>';
+            } else if (challenger.confirmation_sent_at) {
+                chalStatusHtml = '<span class="confirm-status">🟡 Waiting</span>';
+            }
             html += `<div class="challenger-card swipeable" data-role="challenger">
                 <div class="name-row">
                     <span class="pos">2</span>
                     <span class="name">${esc(challenger.player_name)}${partnerStr}</span>
+                    ${chalStatusHtml}
                 </div>
                 <div class="hint">← swipe if lost →</div>
             </div>`;
@@ -581,20 +594,22 @@
         // Queue items
         for (const entry of waiting) {
             const isGhosted = entry.status === 'ghosted';
-            const needsConfirm = entry.confirmation_sent_at && entry.status !== 'confirmed' && !isGhosted;
+            const isMia = entry.status === 'mia';
+            const needsConfirm = entry.confirmation_sent_at && entry.status === 'waiting';
             let classes = 'queue-item';
             if (isGhosted) classes += ' ghosted';
+            else if (isMia) classes += ' mia';
             else if (needsConfirm) classes += ' needs-confirm';
 
             let confirmHtml = '';
-            if (entry.confirmation_sent_at || entry.status === 'confirmed') {
-                if (entry.status === 'confirmed') {
-                    confirmHtml = '<span class="confirm-status confirmed">✓ Ready</span>';
-                } else if (isGhosted) {
-                    confirmHtml = '<span class="confirm-status" style="color:#ef4444;background:rgba(239,68,68,0.15)">👻 AFK?</span>';
-                } else if (entry.confirmation_sent_at) {
-                    confirmHtml = '<span class="confirm-status">⏳ Waiting</span>';
-                }
+            if (entry.status === 'confirmed') {
+                confirmHtml = '<span class="confirm-status confirmed">✓ Here</span>';
+            } else if (isGhosted) {
+                confirmHtml = '<span class="confirm-status" style="color:#ef4444;background:rgba(239,68,68,0.15)">🔴 Probably left</span>';
+            } else if (isMia) {
+                confirmHtml = '<span class="confirm-status" style="color:#f97316;background:rgba(249,115,22,0.15)">🟠 MIA</span>';
+            } else if (needsConfirm) {
+                confirmHtml = '<span class="confirm-status">🟡 Waiting</span>';
             }
 
             const partnerStr = entry.partner_name ? ` & ${esc(entry.partner_name)}` : '';

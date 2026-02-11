@@ -72,6 +72,7 @@ async function createTables() {
       win_streak INTEGER DEFAULT 0,
       confirmation_sent_at TIMESTAMP,
       confirmed_at TIMESTAMP,
+      mia_at TIMESTAMP,
       ghosted_at TIMESTAMP,
       joined_at TIMESTAMP DEFAULT NOW(),
       removed_at TIMESTAMP
@@ -206,7 +207,7 @@ async function addToQueue(sessionId, playerName, partnerName, phoneId) {
       player_name: playerName, partner_name: partnerName || null,
       position: nextPos, phone_id: phoneId || null,
       status: 'waiting', win_streak: 0,
-      confirmation_sent_at: null, confirmed_at: null, ghosted_at: null,
+      confirmation_sent_at: null, confirmed_at: null, mia_at: null, ghosted_at: null,
       joined_at: new Date(), removed_at: null
     };
     mem.queue_entries.push(entry);
@@ -259,7 +260,7 @@ async function compactPositions(sessionId) {
     challenger = existingChallenger;
   } else {
     challenger = others[0]; // Pure FIFO — next in line
-    await resetConfirmationState(challenger.id);
+    // DON'T reset confirmation state — king needs to see the challenger's status color
   }
   await setPosition(challenger.id, 2);
 
@@ -288,12 +289,13 @@ async function resetConfirmationState(entryId) {
       entry.status = 'waiting';
       entry.confirmation_sent_at = null;
       entry.confirmed_at = null;
+      entry.mia_at = null;
       entry.ghosted_at = null;
     }
   } else {
     await pool.query(
       `UPDATE queue_entries SET status = 'waiting', confirmation_sent_at = NULL,
-       confirmed_at = NULL, ghosted_at = NULL WHERE id = $1`,
+       confirmed_at = NULL, mia_at = NULL, ghosted_at = NULL WHERE id = $1`,
       [entryId]
     );
   }
@@ -563,6 +565,7 @@ async function confirmPresence(sessionId, phoneId) {
 
     entry.status = 'confirmed';
     entry.confirmed_at = new Date();
+    entry.mia_at = null;
     entry.ghosted_at = null;
     return { success: true, name: entry.player_name, position: entry.position };
   }
@@ -576,7 +579,7 @@ async function confirmPresence(sessionId, phoneId) {
   if (!entry) return { error: 'not_in_queue' };
 
   await pool.query(
-    `UPDATE queue_entries SET status = 'confirmed', confirmed_at = NOW(), ghosted_at = NULL WHERE id = $1`,
+    `UPDATE queue_entries SET status = 'confirmed', confirmed_at = NOW(), mia_at = NULL, ghosted_at = NULL WHERE id = $1`,
     [entry.id]
   );
   return { success: true, name: entry.player_name, position: entry.position };
@@ -591,6 +594,21 @@ async function sendConfirmation(sessionId, entryId) {
   }
   await pool.query(
     'UPDATE queue_entries SET confirmation_sent_at = NOW() WHERE id = $1',
+    [entryId]
+  );
+}
+
+async function miaPlayer(sessionId, entryId) {
+  if (useMemory) {
+    const entry = mem.queue_entries.find(e => e.id === entryId);
+    if (entry) {
+      entry.status = 'mia';
+      entry.mia_at = new Date();
+    }
+    return;
+  }
+  await pool.query(
+    `UPDATE queue_entries SET status = 'mia', mia_at = NOW() WHERE id = $1`,
     [entryId]
   );
 }
@@ -632,49 +650,58 @@ async function removePlayer(sessionId, entryId) {
 }
 
 async function checkConfirmationTimeouts(sessionId) {
-  // === CONFIRMATION SYSTEM — VISUAL ONLY ===
-  // Pure FIFO queue. Confirmation helps everyone see who's here.
-  // No auto-removal. Players at the table swipe AFK people when it's their turn.
-  //   - Pos 3-5 get asked to confirm
-  //   - 5 min no response → ghosted (AFK visual flag)
-  //   - Anyone can swipe an AFK player. Phone proves identity — no slot stealing.
+  // === CONFIRMATION HEAT MAP ===
+  // Visual status system — everyone can see who's here at a glance.
+  // 🟢 Confirmed — "I'm here" (tapped confirm)
+  // 🟡 Waiting — just asked, give them a sec (0-5 min)
+  // 🟠 MIA — haven't heard back (5-10 min)
+  // 🔴 Probably left — likely gone (10+ min)
+  // No auto-removal. Players at the table swipe when someone's red.
   const queue = await getQueue(sessionId);
   const now = Date.now();
   const actions = [];
 
-  // STEP 1: Reset confirmation state for pos 1-2 (at the table, irrelevant)
+  // STEP 1: Reset confirmation state for pos 1 ONLY (king is at the table)
+  // Pos 2 (challenger) KEEPS their status — king needs to see the color
   for (const entry of queue) {
-    if (entry.position <= 2 && (entry.status === 'confirmed' || entry.status === 'ghosted' || entry.confirmation_sent_at)) {
+    if (entry.position === 1 && (entry.status === 'confirmed' || entry.status === 'mia' || entry.status === 'ghosted' || entry.confirmation_sent_at)) {
       if (useMemory) {
         entry.status = 'waiting';
         entry.confirmation_sent_at = null;
         entry.confirmed_at = null;
+        entry.mia_at = null;
         entry.ghosted_at = null;
       } else {
         await pool.query(
-          `UPDATE queue_entries SET status = 'waiting', confirmation_sent_at = NULL, confirmed_at = NULL, ghosted_at = NULL WHERE id = $1`,
+          `UPDATE queue_entries SET status = 'waiting', confirmation_sent_at = NULL, confirmed_at = NULL, mia_at = NULL, ghosted_at = NULL WHERE id = $1`,
           [entry.id]
         );
       }
     }
   }
 
-  // STEP 2: Ghost check — 5 min no response = AFK flag
+  // STEP 2: Status escalation for pos 2+ who were asked
   for (const entry of queue) {
-    if (entry.position < 3) continue;
+    if (entry.position < 2) continue;
     if (entry.status === 'confirmed' || entry.status === 'ghosted') continue;
     if (!entry.confirmation_sent_at) continue;
 
     const elapsed = (now - new Date(entry.confirmation_sent_at).getTime()) / 1000;
-    if (elapsed >= 300) {
+
+    if (entry.status === 'mia' && elapsed >= 600) {
+      // 10 min total → probably left (red)
       await ghostPlayer(sessionId, entry.id);
       actions.push({ action: 'ghosted', name: entry.player_name, id: entry.id });
+    } else if (entry.status === 'waiting' && elapsed >= 300) {
+      // 5 min → MIA (orange)
+      await miaPlayer(sessionId, entry.id);
+      actions.push({ action: 'mia', name: entry.player_name, id: entry.id });
     }
   }
 
-  // STEP 3: Ask positions 3-5 to confirm (if not already asked)
+  // STEP 3: Ask positions 2-5 to confirm (if not already asked)
   const toAsk = queue.filter(e =>
-    e.position >= 3 && e.position <= 5
+    e.position >= 2 && e.position <= 5
     && e.status === 'waiting' && !e.confirmation_sent_at
   ).sort((a, b) => a.position - b.position);
 

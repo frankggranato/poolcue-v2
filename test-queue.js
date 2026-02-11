@@ -42,13 +42,22 @@ async function fakeAsked(sid, playerName, minutesAgo) {
   const e = q.find(x => x.player_name === playerName);
   if (e) e.confirmation_sent_at = new Date(Date.now() - minutesAgo * 60000);
 }
+async function fakeMia(sid, playerName, miaMinutesAgo) {
+  const q = await getQ(sid);
+  const e = q.find(x => x.player_name === playerName);
+  if (e) {
+    e.status = 'mia';
+    e.mia_at = new Date(Date.now() - miaMinutesAgo * 60000);
+    e.confirmation_sent_at = new Date(Date.now() - (miaMinutesAgo + 5) * 60000);
+  }
+}
 async function fakeGhosted(sid, playerName, ghostMinutesAgo) {
   const q = await getQ(sid);
   const e = q.find(x => x.player_name === playerName);
   if (e) {
     e.status = 'ghosted';
     e.ghosted_at = new Date(Date.now() - ghostMinutesAgo * 60000);
-    e.confirmation_sent_at = new Date(Date.now() - (ghostMinutesAgo + 3) * 60000);
+    e.confirmation_sent_at = new Date(Date.now() - (ghostMinutesAgo + 10) * 60000);
   }
 }
 
@@ -282,17 +291,17 @@ await test('Rapid joins during a long game', async () => {
 // ============================================
 console.log('\n📋 SECTION 5: Confirmation (Bartender Visual)\n');
 
-await test('Pos 3-5 asked on first check', async () => {
+await test('Pos 2-5 asked on first check', async () => {
   const sid = await setup(7);
   await db.checkConfirmationTimeouts(sid);
   const q = await getQ(sid);
-  for (let p = 3; p <= 5; p++) {
+  for (let p = 2; p <= 5; p++) {
     const e = q.find(x => x.position === p);
     assert(!!e.confirmation_sent_at, `Pos ${p} asked`);
   }
   assert(!q.find(x => x.position === 6).confirmation_sent_at, 'Pos 6 NOT asked');
   assert(!q.find(x => x.position === 1).confirmation_sent_at, 'Pos 1 NOT asked');
-  console.log(`  T${testNum} ✓ Only 3-5 asked`);
+  console.log(`  T${testNum} ✓ Pos 2-5 asked, king and 6+ not`);
 });
 
 await test('Player confirms — status changes', async () => {
@@ -305,30 +314,32 @@ await test('Player confirms — status changes', async () => {
   console.log(`  T${testNum} ✓ C confirmed`);
 });
 
-await test('Ghosted after 5 min — stays in queue as AFK flag', async () => {
+await test('MIA after 5 min — stays in queue as visual flag', async () => {
   const sid = await setup(5);
   await db.checkConfirmationTimeouts(sid);
   await fakeAsked(sid, 'C', 6); // asked 6 min ago
   await db.checkConfirmationTimeouts(sid);
   const q = await getQ(sid);
   const c = q.find(e => e.player_name === 'C');
-  assert(c.status === 'ghosted', 'C ghosted');
+  assert(c.status === 'mia', 'C MIA after 5 min');
   assert(c.position === 3, 'C still at pos 3');
-  console.log(`  T${testNum} ✓ C ghosted but still in line`);
+  console.log(`  T${testNum} ✓ C MIA but still in line`);
 });
 
-await test('No auto-removal — ghosted stays forever until swiped', async () => {
+await test('Probably left after 10 min — still in queue', async () => {
   const sid = await setup(5);
   await db.checkConfirmationTimeouts(sid);
-  await fakeGhosted(sid, 'C', 30); // ghosted 30 min ago
-  await db.checkConfirmationTimeouts(sid);
+  await fakeAsked(sid, 'C', 11); // asked 11 min ago
+  await db.checkConfirmationTimeouts(sid); // MIA (5 min)
+  await db.checkConfirmationTimeouts(sid); // Probably left (10 min, already MIA + elapsed > 600s)
   const q = await getQ(sid);
-  assert(!!q.find(e => e.player_name === 'C'), 'C still in queue');
-  assert(q.length === 5, 'All 5 still there');
-  console.log(`  T${testNum} ✓ No auto-removal even after 30 min`);
+  const c = q.find(e => e.player_name === 'C');
+  assert(c.status === 'ghosted', 'C probably left after 10 min');
+  assert(c.position === 3, 'C still at pos 3');
+  console.log(`  T${testNum} ✓ C red but still in line`);
 });
 
-await test('Confirmed player promoted — state cleared', async () => {
+await test('Confirmed player promoted — state carries to challenger', async () => {
   const sid = await setup(5);
   await db.checkConfirmationTimeouts(sid);
   await db.confirmPresence(sid, 'phone_C'); // C confirmed at pos 3
@@ -337,9 +348,8 @@ await test('Confirmed player promoted — state cleared', async () => {
   const q = await getQ(sid);
   const c = q.find(e => e.player_name === 'C');
   assert(c.position === 2, 'C challenger');
-  assert(!c.confirmation_sent_at, 'Confirmation cleared');
-  assert(c.status === 'waiting', 'Status reset');
-  console.log(`  T${testNum} ✓ C promoted, state clean`);
+  assert(c.status === 'confirmed', 'Confirmed status carries forward');
+  console.log(`  T${testNum} ✓ C promoted, still green`);
 });
 
 await test('New pos 3 gets asked after game ends', async () => {
@@ -604,12 +614,12 @@ await test('Bartender accidentally swipes wrong result, undoes, records right on
   console.log(`  T${testNum} ✓ Undo and correct: ${names(q)}`);
 });
 
-await test('Half the bar confirms, half ghosted — queue order unchanged', async () => {
+await test('Half the bar confirms, half MIA — queue order unchanged', async () => {
   const sid = await setup(8);
   await db.checkConfirmationTimeouts(sid);
-  // C confirms, D ghosts, E confirms
+  // C confirms, D goes MIA, E confirms
   await db.confirmPresence(sid, 'phone_C');
-  await fakeAsked(sid, 'D', 5);
+  await fakeAsked(sid, 'D', 6); // asked 6 min ago → MIA
   await db.checkConfirmationTimeouts(sid);
   await db.confirmPresence(sid, 'phone_E');
   
@@ -617,25 +627,25 @@ await test('Half the bar confirms, half ghosted — queue order unchanged', asyn
   // Order should still be A,B,C,D,E,F,G,H regardless of confirm status
   assert(q.map(e=>e.player_name).join('') === 'ABCDEFGH', 'Queue order unchanged');
   const d = q.find(e => e.player_name === 'D');
-  assert(d.status === 'ghosted', 'D ghosted');
+  assert(d.status === 'mia', 'D MIA');
   assert(d.position === 4, 'D still at pos 4');
-  console.log(`  T${testNum} ✓ Mixed confirm/ghost, FIFO intact: ${names(q)}`);
+  console.log(`  T${testNum} ✓ Mixed confirm/MIA, FIFO intact: ${names(q)}`);
 });
 
-await test('Ghosted player taps confirm at last second', async () => {
+await test('MIA player taps confirm — recovers to green', async () => {
   const sid = await setup(5);
   await db.checkConfirmationTimeouts(sid);
-  await fakeAsked(sid, 'C', 5);
-  await db.checkConfirmationTimeouts(sid); // C now ghosted
+  await fakeAsked(sid, 'C', 6); // 6 min → MIA
+  await db.checkConfirmationTimeouts(sid);
   const q = await getQ(sid);
-  assert(q.find(e => e.player_name === 'C').status === 'ghosted', 'C ghosted');
+  assert(q.find(e => e.player_name === 'C').status === 'mia', 'C MIA');
   // C taps confirm
   await db.confirmPresence(sid, 'phone_C');
   const q2 = await getQ(sid);
   const c = q2.find(e => e.player_name === 'C');
   assert(c.status === 'confirmed', 'C recovered!');
   assert(c.position === 3, 'C still pos 3');
-  console.log(`  T${testNum} ✓ Ghost recovery works`);
+  console.log(`  T${testNum} ✓ MIA recovery works`);
 });
 
 await test('10 games then session closed and reopened', async () => {
@@ -760,9 +770,9 @@ await test('checkConfirmationTimeouts called 100 times (idempotent)', async () =
   const q = await getQ(sid);
   assert(q.length === 7, 'Still 7 players');
   q.forEach((e, i) => assert(e.position === i+1, 'Sequential'));
-  // Pos 3-5 asked exactly once (confirmation_sent_at set, not duplicated)
+  // Pos 2-5 asked exactly once (confirmation_sent_at set, not duplicated)
   const asked = q.filter(e => !!e.confirmation_sent_at);
-  assert(asked.length === 3, 'Exactly 3 asked');
+  assert(asked.length === 4, 'Exactly 4 asked (pos 2-5)');
   console.log(`  T${testNum} ✓ 100 checks, idempotent`);
 });
 

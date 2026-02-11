@@ -88,6 +88,12 @@
       box-shadow: 0 0 0 0 rgba(239,68,68,0.5), 0 8px 24px rgba(239,68,68,0.3);
       animation: ghostPulse 1s ease-in-out infinite;
     }
+    .confirm-big.mia {
+      background: linear-gradient(135deg, #f97316, #ea580c);
+      color: white;
+      box-shadow: 0 0 0 0 rgba(249,115,22,0.5), 0 8px 24px rgba(249,115,22,0.3);
+      animation: miaPulse 1.5s ease-in-out infinite;
+    }
     @keyframes confirmPulse {
       0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(34,197,94,0.5), 0 8px 24px rgba(34,197,94,0.3); }
       50% { transform: scale(1.02); box-shadow: 0 0 0 14px rgba(34,197,94,0), 0 8px 24px rgba(34,197,94,0.2); }
@@ -95,6 +101,10 @@
     @keyframes ghostPulse {
       0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239,68,68,0.5); }
       50% { transform: scale(1.03); box-shadow: 0 0 0 16px rgba(239,68,68,0); }
+    }
+    @keyframes miaPulse {
+      0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(249,115,22,0.5); }
+      50% { transform: scale(1.02); box-shadow: 0 0 0 12px rgba(249,115,22,0); }
     }
     @keyframes confirmShine {
       0%, 100% { transform: translate(-10%, -10%) rotate(0deg); opacity: 0; }
@@ -236,7 +246,7 @@ let ghostInterval = null;
 let lastStateHash = '';
 let lastQueueHtml = '';
 let lastPosition = null;
-let lastConfirmState = null; // null | 'asked' | 'confirmed' | 'ghosted'
+let lastConfirmState = null; // null | 'asked' | 'confirmed' | 'mia' | 'ghosted'
 
 // Alert sound using Web Audio API — works without external files
 let audioCtx = null;
@@ -421,12 +431,12 @@ function render() {
   }
   lastPosition = pos;
 
-  // Confirmation section — show for ANY position 3+ that has been asked
+  // Confirmation section — show for pos 2+ (challenger and queue)
   const confirmSection = document.getElementById('confirmSection');
   const confirmBtn = document.getElementById('confirmBtn');
   const ghostWarning = document.getElementById('ghostWarning');
 
-  if (pos >= 3 && myEntry.confirmation_sent_at) {
+  if (pos >= 2 && myEntry.confirmation_sent_at) {
     if (myEntry.status === 'confirmed') {
       confirmSection.classList.remove('hidden');
       confirmBtn.textContent = '✓ You\'re locked in';
@@ -437,7 +447,7 @@ function render() {
       lastConfirmState = 'confirmed';
     } else if (myEntry.status === 'ghosted') {
       confirmSection.classList.remove('hidden');
-      confirmBtn.textContent = '🚨 TAP NOW — CONFIRM YOU\'RE HERE';
+      confirmBtn.textContent = '🚨 TAP NOW — PROVE YOU\'RE HERE';
       confirmBtn.className = 'confirm-big ghosted';
       confirmBtn.disabled = false;
       ghostWarning.classList.remove('hidden');
@@ -446,9 +456,23 @@ function render() {
       if (lastConfirmState !== 'ghosted') {
         if (navigator.vibrate) navigator.vibrate([400, 100, 400, 100, 400]);
         playAlertTone('ghost');
-        showToast('⚠️ You look AFK — tap to confirm!', 'error');
+        showToast('🔴 You\'re showing as "Probably left" — tap to confirm!', 'error');
       }
       lastConfirmState = 'ghosted';
+    } else if (myEntry.status === 'mia') {
+      confirmSection.classList.remove('hidden');
+      confirmBtn.textContent = '⚠️ TAP TO CONFIRM YOU\'RE HERE';
+      confirmBtn.className = 'confirm-big mia';
+      confirmBtn.disabled = false;
+      ghostWarning.classList.add('hidden');
+      stopGhostTimer();
+      // Alert on MIA transition
+      if (lastConfirmState !== 'mia') {
+        if (navigator.vibrate) navigator.vibrate([300, 100, 300]);
+        playAlertTone('ghost');
+        showToast('🟠 You\'re showing as MIA — tap to confirm!', 'error');
+      }
+      lastConfirmState = 'mia';
     } else {
       // Waiting for confirmation
       confirmSection.classList.remove('hidden');
