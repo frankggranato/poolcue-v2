@@ -235,36 +235,35 @@ async function compactPositions(sessionId) {
 
   // === PROMOTION PRIORITY ===
   // When a slot opens, pick the best candidate in this order:
-  //   1. Confirmed — tapped "I'm here", proven present
-  //   2. Not yet suspect — never asked, OR asked recently (<2 min)
-  //      These people are almost certainly still here. Queue order wins.
-  //   3. Probably AFK — asked 2+ min ago, no response. Yellow flag.
-  //   4. Ghosted — 3+ min unresponsive, probably gone (last resort)
+  //   1. Likely here — confirmed OR not yet suspect (never asked / asked <2 min)
+  //      Queue order wins among these. Confirming doesn't let you skip the line,
+  //      it just proves you're present. Someone standing there who didn't check
+  //      their phone shouldn't get leapfrogged.
+  //   2. Probably AFK — asked 2+ min ago, no response. Yellow flag.
+  //   3. Ghosted — 3+ min unresponsive, probably gone (last resort)
   // Within each tier, queue order (position) is preserved.
   const now = Date.now();
   const AFK_THRESHOLD = 120_000; // 2 minutes in ms
 
   function pickBestCandidate(candidates) {
-    // Tier 1: Confirmed — proven here
-    const confirmed = candidates.find(e => e.status === 'confirmed');
-    if (confirmed) return confirmed;
-
-    // Tier 2: Not suspect — never asked, or asked recently
-    const notSuspect = candidates.find(e =>
-      e.status === 'waiting' && (
+    // Tier 1: Likely here — confirmed OR not suspect
+    // Confirmation doesn't jump the line; it protects you from being skipped.
+    const likelyHere = candidates.find(e =>
+      e.status === 'confirmed' ||
+      (e.status === 'waiting' && (
         !e.confirmation_sent_at ||
         (now - new Date(e.confirmation_sent_at).getTime()) < AFK_THRESHOLD
-      )
+      ))
     );
-    if (notSuspect) return notSuspect;
+    if (likelyHere) return likelyHere;
 
-    // Tier 3: Probably AFK — asked 2+ min, still waiting
+    // Tier 2: Probably AFK — asked 2+ min, still waiting
     const probablyAfk = candidates.find(e =>
       e.status === 'waiting' && e.confirmation_sent_at
     );
     if (probablyAfk) return probablyAfk;
 
-    // Tier 4: Everyone is ghosted — take first. Table never sits empty.
+    // Tier 3: Everyone is ghosted — take first. Table never sits empty.
     return candidates[0];
   }
 

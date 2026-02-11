@@ -163,6 +163,11 @@
   </div>
 
   <div class="container">
+    <!-- Sound unlock prompt -->
+    <div id="soundPrompt" style="background: rgba(255,255,255,0.08); border-radius: 8px; padding: 8px 12px; margin-bottom: 12px; text-align: center; font-size: 13px; color: #aaa; cursor: pointer;" onclick="this.style.display='none'">
+      🔔 Tap anywhere to enable sound alerts
+    </div>
+
     <!-- Position hero -->
     <div class="position-hero" id="positionHero">
       <div class="position-number" id="posNumber">#—</div>
@@ -281,11 +286,27 @@ function playAlertTone(type) {
   } catch (_) {}
 }
 
-// Unlock audio on first touch (mobile browsers require user gesture)
-document.addEventListener('touchstart', function() {
-  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  if (audioCtx.state === 'suspended') audioCtx.resume();
-}, { once: true });
+// Unlock audio on first user interaction (mobile browsers require gesture)
+// Covers both touch (mobile) and click (desktop)
+let audioUnlocked = false;
+function unlockAudio() {
+  if (audioUnlocked) return;
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    // Play a silent buffer to fully unlock on iOS
+    const buf = audioCtx.createBuffer(1, 1, 22050);
+    const src = audioCtx.createBufferSource();
+    src.buffer = buf;
+    src.connect(audioCtx.destination);
+    src.start(0);
+    audioUnlocked = true;
+    const prompt = document.getElementById('soundPrompt');
+    if (prompt) prompt.style.display = 'none';
+  } catch (_) {}
+}
+document.addEventListener('touchstart', unlockAudio, { once: false });
+document.addEventListener('click', unlockAudio, { once: false });
 
 function stateHash() {
   const me = myEntry ? `${myEntry.position}|${myEntry.status}|${myEntry.win_streak}|${!!myEntry.confirmation_sent_at}` : 'none';
