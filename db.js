@@ -223,7 +223,7 @@ async function addToQueue(sessionId, playerName, partnerName, phoneId) {
 
 // ============================================
 // Position compaction — ensures positions are always 1, 2, 3, ...
-// Also handles promotion: skips unconfirmed/ghosted players for pos 2
+// Pure FIFO: next in line gets promoted, confirmation doesn't affect order
 // ============================================
 
 async function compactPositions(sessionId) {
