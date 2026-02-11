@@ -183,6 +183,44 @@
         .state-screen .icon { font-size: 3rem; }
         .state-screen h2 { font-size: 1.3rem; font-weight: 600; color: #888; }
         .state-screen p { color: #555; font-size: 0.85rem; }
+
+        /* Welcome splash (no session / idle board) */
+        .welcome-screen {
+            display: none; flex: 1; align-items: center; justify-content: center;
+            flex-direction: column; text-align: center; gap: 0;
+            padding: 20px;
+        }
+        .welcome-screen.active { display: flex; }
+        .welcome-brand {
+            font-size: 0.75rem; font-weight: 600; color: #555;
+            text-transform: uppercase; letter-spacing: 3px; margin-bottom: 6px;
+        }
+        .welcome-headline {
+            font-size: 2.4rem; font-weight: 700; color: #fff;
+            letter-spacing: -0.02em; line-height: 1.1; margin-bottom: 6px;
+        }
+        .welcome-sub {
+            font-size: 0.9rem; color: #666; margin-bottom: 24px;
+        }
+        .welcome-qr-wrap {
+            background: #fff; padding: 16px; border-radius: 12px;
+            box-shadow: 0 0 40px rgba(245,197,24,0.08), 0 4px 20px rgba(0,0,0,0.4);
+            margin-bottom: 16px;
+        }
+        .welcome-qr-wrap img { width: 180px; height: 180px; display: block; }
+        .welcome-cta {
+            font-size: 0.8rem; font-weight: 500; color: #f5c518;
+            text-transform: uppercase; letter-spacing: 2px;
+            animation: pulse-glow 2.5s ease-in-out infinite;
+        }
+        @keyframes pulse-glow {
+            0%, 100% { opacity: 0.6; }
+            50% { opacity: 1; }
+        }
+        .welcome-footer {
+            position: absolute; bottom: 16px;
+            font-size: 0.6rem; color: #333; letter-spacing: 1px;
+        }
     </style>
 </head>
 <body>
@@ -223,11 +261,15 @@
                 <p>Scan the QR code to put your name up</p>
             </div>
 
-            <!-- Closed state -->
-            <div class="state-screen" id="stateClosed">
-                <div class="icon">🌙</div>
-                <h2>Table Closed</h2>
-                <p>See you next time</p>
+            <!-- Welcome / Idle state (no session or closed) -->
+            <div class="welcome-screen" id="stateWelcome">
+                <div class="welcome-brand">Pool Cue</div>
+                <div class="welcome-headline">Got Next?</div>
+                <div class="welcome-sub">Scan to put your name up</div>
+                <div class="welcome-qr-wrap">
+                    <img id="welcomeQrImg" src="" class="qr-code" alt="QR" style="width:180px;height:180px;">
+                </div>
+                <div class="welcome-cta">Scan with your phone's camera</div>
             </div>
         </div>
 
@@ -268,6 +310,7 @@
 
     // QR code
     document.getElementById('qrImg').src = `/qr/${TABLE_CODE}`;
+    document.getElementById('welcomeQrImg').src = `/qr/${TABLE_CODE}`;
 
     // ============================================
     // WebSocket
@@ -321,20 +364,20 @@
     function render() {
         const mainEl = document.getElementById('mainContent');
         const stateEmpty = document.getElementById('stateEmpty');
-        const stateClosed = document.getElementById('stateClosed');
+        const stateWelcome = document.getElementById('stateWelcome');
         const headerEl = document.querySelector('.header');
         const footerEl = document.querySelector('.footer');
 
-        // Closed state
+        // No session or closed — show welcome splash with QR
         if (!session || session.status === 'closed') {
             headerEl.style.display = 'none';
             mainEl.style.display = 'none';
             footerEl.style.display = 'none';
             stateEmpty.classList.remove('active');
-            stateClosed.classList.add('active');
+            stateWelcome.classList.add('active');
             return;
         }
-        stateClosed.classList.remove('active');
+        stateWelcome.classList.remove('active');
 
         // Empty queue
         if (queue.length === 0) {
