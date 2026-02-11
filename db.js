@@ -836,8 +836,6 @@ module.exports = {
   undoLastRemoval,
   leaveQueue,
   confirmPresence,
-  miaPlayer,
-  ghostPlayer,
   removePlayer,
   checkConfirmationTimeouts,
   updatePartnerName,
