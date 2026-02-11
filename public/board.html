@@ -744,7 +744,24 @@
     function launchKiosk() {
       document.getElementById('kioskOverlay').classList.remove('show');
       document.documentElement.requestFullscreen().catch(() => {});
+      acquireWakeLock();
     }
+
+    // Wake Lock — keeps screen on in kiosk mode
+    let wakeLock = null;
+    async function acquireWakeLock() {
+      if (!('wakeLock' in navigator)) return;
+      try {
+        wakeLock = await navigator.wakeLock.request('screen');
+        wakeLock.addEventListener('release', () => { wakeLock = null; });
+      } catch (_) {}
+    }
+    // Re-acquire when tab becomes visible (browser releases it on hide)
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && !wakeLock && window.location.search.includes('kiosk')) {
+        acquireWakeLock();
+      }
+    });
 
     // Fullscreen toggle
     function toggleFullscreen() {
