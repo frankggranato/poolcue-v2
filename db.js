@@ -53,7 +53,7 @@ async function createTables() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS sessions (
       id SERIAL PRIMARY KEY,
-      table_code VARCHAR(10) UNIQUE NOT NULL,
+      table_code VARCHAR(10) NOT NULL,
       pin VARCHAR(10) NOT NULL DEFAULT '0000',
       game_type VARCHAR(10) NOT NULL DEFAULT 'singles',
       rule_type VARCHAR(20) NOT NULL DEFAULT 'bar_rules',
@@ -97,6 +97,24 @@ async function createTables() {
   if (colCheck.rows.length === 0) {
     await pool.query('ALTER TABLE queue_entries ADD COLUMN mia_at TIMESTAMP');
     console.log('✅ Migration: added mia_at column');
+  }
+
+  // Migration: drop UNIQUE on table_code (allows multiple sessions per table)
+  // Replace with partial unique index (only one ACTIVE session per table)
+  const uniqueCheck = await pool.query(`
+    SELECT constraint_name FROM information_schema.table_constraints
+    WHERE table_name = 'sessions' AND constraint_type = 'UNIQUE'
+      AND constraint_name = 'sessions_table_code_key'
+  `);
+  if (uniqueCheck.rows.length > 0) {
+    await pool.query('ALTER TABLE sessions DROP CONSTRAINT sessions_table_code_key');
+    await pool.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS sessions_active_table_code
+      ON sessions (table_code) WHERE status = 'active'
+    `);
+    // Clean up old closed sessions that were blocking
+    await pool.query("DELETE FROM sessions WHERE status = 'closed'");
+    console.log('✅ Migration: fixed table_code unique constraint');
   }
 
   console.log('✅ Tables ready');
