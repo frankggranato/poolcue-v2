@@ -229,6 +229,63 @@ let ghostInterval = null;
 let lastStateHash = '';
 let lastQueueHtml = '';
 let lastPosition = null;
+let lastConfirmState = null; // null | 'asked' | 'confirmed' | 'ghosted'
+
+// Alert sound using Web Audio API — works without external files
+let audioCtx = null;
+function playAlertTone(type) {
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+
+    if (type === 'confirm') {
+      // Two-tone chime: friendly but attention-grabbing
+      [520, 660].forEach((freq, i) => {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.3, audioCtx.currentTime + i * 0.15);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + i * 0.15 + 0.4);
+        osc.connect(gain).connect(audioCtx.destination);
+        osc.start(audioCtx.currentTime + i * 0.15);
+        osc.stop(audioCtx.currentTime + i * 0.15 + 0.4);
+      });
+    } else if (type === 'ghost') {
+      // Urgent triple beep
+      [0, 0.2, 0.4].forEach(delay => {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'square';
+        osc.frequency.value = 880;
+        gain.gain.setValueAtTime(0.25, audioCtx.currentTime + delay);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + delay + 0.12);
+        osc.connect(gain).connect(audioCtx.destination);
+        osc.start(audioCtx.currentTime + delay);
+        osc.stop(audioCtx.currentTime + delay + 0.12);
+      });
+    } else if (type === 'promote') {
+      // Rising triumphant chime
+      [440, 554, 659].forEach((freq, i) => {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.3, audioCtx.currentTime + i * 0.12);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + i * 0.12 + 0.35);
+        osc.connect(gain).connect(audioCtx.destination);
+        osc.start(audioCtx.currentTime + i * 0.12);
+        osc.stop(audioCtx.currentTime + i * 0.12 + 0.35);
+      });
+    }
+  } catch (_) {}
+}
+
+// Unlock audio on first touch (mobile browsers require user gesture)
+document.addEventListener('touchstart', function() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+}, { once: true });
 
 function stateHash() {
   const me = myEntry ? `${myEntry.position}|${myEntry.status}|${myEntry.win_streak}|${!!myEntry.confirmation_sent_at}` : 'none';
@@ -310,9 +367,11 @@ function render() {
   if (lastPosition !== null && lastPosition !== pos) {
     if (pos === 2) {
       if (navigator.vibrate) navigator.vibrate([300, 150, 300, 150, 300]);
+      playAlertTone('promote');
       showToast('⚔️ You\'re up next — get to the table!', 'info');
     } else if (pos === 1) {
       if (navigator.vibrate) navigator.vibrate([500, 200, 500]);
+      playAlertTone('promote');
       showToast('👑 You\'re the Shot Caller!', 'success');
     } else if (pos === 3 && lastPosition > 3) {
       if (navigator.vibrate) navigator.vibrate([200]);
@@ -334,6 +393,7 @@ function render() {
       confirmBtn.disabled = true;
       ghostWarning.classList.add('hidden');
       stopGhostTimer();
+      lastConfirmState = 'confirmed';
     } else if (myEntry.status === 'ghosted') {
       confirmSection.classList.remove('hidden');
       confirmBtn.textContent = '🚨 TAP NOW — CONFIRM YOU\'RE HERE';
@@ -341,6 +401,13 @@ function render() {
       confirmBtn.disabled = false;
       ghostWarning.classList.remove('hidden');
       startGhostTimer();
+      // Alert on ghost transition
+      if (lastConfirmState !== 'ghosted') {
+        if (navigator.vibrate) navigator.vibrate([400, 100, 400, 100, 400]);
+        playAlertTone('ghost');
+        showToast('⚠️ Respond now or lose your spot!', 'error');
+      }
+      lastConfirmState = 'ghosted';
     } else {
       // Waiting for confirmation
       confirmSection.classList.remove('hidden');
@@ -349,11 +416,19 @@ function render() {
       confirmBtn.disabled = false;
       ghostWarning.classList.add('hidden');
       stopGhostTimer();
+      // Alert on first confirmation request
+      if (lastConfirmState !== 'asked') {
+        if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+        playAlertTone('confirm');
+        showToast('📍 Confirm you\'re still here!', 'info');
+      }
+      lastConfirmState = 'asked';
     }
   } else {
     confirmSection.classList.add('hidden');
     ghostWarning.classList.add('hidden');
     stopGhostTimer();
+    lastConfirmState = null;
   }
 
   // Shot caller controls — show for position 1 always
