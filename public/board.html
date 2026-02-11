@@ -629,6 +629,22 @@
     // Attach swipe to the king section in the header
     attachSwipeHandlers();
 
+    // Hidden kiosk exit: tap top-left corner 5 times quickly
+    let cornerTaps = 0;
+    let cornerTimer = null;
+    const cornerZone = document.createElement('div');
+    cornerZone.style.cssText = 'position:fixed;top:0;left:0;width:40px;height:40px;z-index:9999;';
+    document.body.appendChild(cornerZone);
+    cornerZone.addEventListener('click', () => {
+      cornerTaps++;
+      clearTimeout(cornerTimer);
+      if (cornerTaps >= 5) {
+        cornerTaps = 0;
+        if (confirm('Exit kiosk mode?')) window.close();
+      }
+      cornerTimer = setTimeout(() => { cornerTaps = 0; }, 2000);
+    });
+
     init();
     </script>
 </body>
