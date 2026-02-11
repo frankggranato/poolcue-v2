@@ -264,6 +264,18 @@
         .kiosk-overlay .kiosk-title { font-size: 1.8rem; font-weight: 700; color: #fff; }
         .kiosk-overlay .kiosk-sub { font-size: 1rem; color: #f5c518; animation: pulse-glow 2s ease-in-out infinite; }
 
+        /* Kiosk layout — fill the screen edge-to-edge */
+        body.kiosk { padding: 0; }
+        body.kiosk .frame {
+            max-width: 100%;
+            max-height: 100vh;
+            height: 100vh;
+            border-radius: 0;
+            padding: 6px;
+        }
+        body.kiosk .frame::before { display: none; }
+        body.kiosk .board { border-radius: 0; }
+
         /* Debug panel */
         .debug-panel {
             position: fixed; bottom: 0; left: 0; right: 0;
@@ -740,6 +752,7 @@
     // Kiosk mode: show overlay if ?kiosk in URL
     if (window.location.search.includes('kiosk')) {
       document.getElementById('kioskOverlay').classList.add('show');
+      document.body.classList.add('kiosk');
     }
     function launchKiosk() {
       document.getElementById('kioskOverlay').classList.remove('show');
