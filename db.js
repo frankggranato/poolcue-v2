@@ -782,6 +782,46 @@ async function ensureSession(tableCode, pin) {
   return session;
 }
 
+// Auto-clear queue if no activity in 6+ hours
+const STALE_THRESHOLD = 6 * 60 * 60 * 1000; // 6 hours in ms
+async function clearStaleQueue(sessionId) {
+  const queue = await getQueue(sessionId);
+  if (queue.length === 0) return false;
+
+  // Find most recent activity: latest join or latest game
+  let lastActivity = 0;
+  for (const entry of queue) {
+    const joined = new Date(entry.joined_at).getTime();
+    if (joined > lastActivity) lastActivity = joined;
+  }
+
+  // Check game log too
+  let lastGame;
+  if (useMemory) {
+    lastGame = [...mem.game_log].filter(g => g.session_id === sessionId).pop();
+  } else {
+    const res = await pool.query(
+      'SELECT ended_at FROM game_log WHERE session_id = $1 ORDER BY ended_at DESC LIMIT 1',
+      [sessionId]
+    );
+    lastGame = res.rows[0];
+  }
+  if (lastGame) {
+    const ended = new Date(lastGame.ended_at).getTime();
+    if (ended > lastActivity) lastActivity = ended;
+  }
+
+  if (Date.now() - lastActivity < STALE_THRESHOLD) return false;
+
+  // Stale — clear all entries
+  if (useMemory) {
+    mem.queue_entries = mem.queue_entries.filter(e => e.session_id !== sessionId);
+  } else {
+    await pool.query('DELETE FROM queue_entries WHERE session_id = $1', [sessionId]);
+  }
+  return true;
+}
+
 // ============================================
 // Exports
 // ============================================
@@ -802,5 +842,6 @@ module.exports = {
   removePlayer,
   checkConfirmationTimeouts,
   updatePartnerName,
-  ensureSession
+  ensureSession,
+  clearStaleQueue
 };

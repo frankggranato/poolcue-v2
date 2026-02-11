@@ -155,6 +155,7 @@ app.get('/api/queue/:tableCode', async (req, res) => {
   try {
     const session = await db.getSession(req.params.tableCode);
     if (!session) return res.json({ queue: [], session: null });
+    await db.clearStaleQueue(session.id);
     const queue = await db.getQueue(session.id);
     const avgTime = await db.getAvgGameTime(session.id);
     const phoneId = getPhoneId(req, res);
