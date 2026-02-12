@@ -93,26 +93,36 @@
         /* Main Content - Natural column flow: top-to-bottom, then next column */
         .main {
             flex: 1;
+            display: block;
             column-count: 2;
             column-gap: 14px;
             column-fill: auto;
             overflow: hidden;
+            height: 0;
+            min-height: 0;
             padding: 12px 16px;
         }
         .queue-label {
             font-size: 0.75rem; font-weight: 600; color: #555;
             text-transform: uppercase; letter-spacing: 1px;
-            margin-bottom: 6px;
+            margin-bottom: 6px; column-span: all;
         }
 
-        /* Challenger Card — just a queue-item with red accent */
+        /* Challenger Card */
         .challenger-card {
+            background: #1a1a1a;
             border: 1px solid rgba(239,68,68,0.3);
-            break-inside: avoid;
+            border-radius: 5px;
+            padding: 8px 12px;
             margin-bottom: 4px;
+            transition: all 0.15s;
+            break-inside: avoid;
+            animation: slideIn 0.3s ease-out;
         }
-        .challenger-card .pos { color: #ef4444; }
-        .challenger-card .name { color: #fff; font-weight: 600; }
+        .challenger-card .name-row { display: flex; align-items: center; gap: 8px; }
+        .challenger-card .pos { font-size: 0.9rem; color: #ef4444; min-width: 20px; font-weight: 500; }
+        .challenger-card .name { font-size: 1rem; font-weight: 600; color: #fff; }
+        .challenger-card .hint { font-size: 0.6rem; color: #444; margin-top: 2px; margin-left: 28px; }
         .hint { font-size: 0.7rem; color: #444; }
 
         /* Swipe states */
@@ -552,13 +562,35 @@
 
         let html = '';
 
-        // Build a single item (works for challenger or regular queue entry)
-        function buildItem(entry, isChallenger) {
+        // Challenger card
+        if (challenger) {
+            const partnerStr = challenger.partner_name ? ` & ${esc(challenger.partner_name)}` : '';
+            let chalStatusHtml = '';
+            if (challenger.status === 'confirmed') {
+                chalStatusHtml = '<span class="confirm-status confirmed">✓ Here</span>';
+            } else if (challenger.status === 'ghosted') {
+                chalStatusHtml = '<span class="confirm-status" style="color:#ef4444;background:rgba(239,68,68,0.15)">🔴 Probably left</span>';
+            } else if (challenger.status === 'mia') {
+                chalStatusHtml = '<span class="confirm-status" style="color:#f97316;background:rgba(249,115,22,0.15)">🟠 MIA</span>';
+            } else if (challenger.confirmation_sent_at) {
+                chalStatusHtml = '<span class="confirm-status">🟡 Waiting</span>';
+            }
+            html += `<div class="challenger-card swipeable" data-role="challenger">
+                <div class="name-row">
+                    <span class="pos">2</span>
+                    <span class="name">${esc(challenger.player_name)}${partnerStr}</span>
+                    ${chalStatusHtml}
+                </div>
+                ${queue.some(e => e.position === 2) ? '<div class="hint">← swipe if lost →</div>' : ''}
+            </div>`;
+        }
+
+        // Queue items (capped at MAX_DISPLAY)
+        for (const entry of displayWaiting) {
             const isGhosted = entry.status === 'ghosted';
             const isMia = entry.status === 'mia';
             const needsConfirm = entry.confirmation_sent_at && entry.status === 'waiting';
-
-            let classes = isChallenger ? 'queue-item challenger-card swipeable' : 'queue-item';
+            let classes = 'queue-item';
             if (isGhosted) classes += ' ghosted';
             else if (isMia) classes += ' mia';
             else if (needsConfirm) classes += ' needs-confirm';
@@ -575,16 +607,13 @@
             }
 
             const partnerStr = entry.partner_name ? ` & ${esc(entry.partner_name)}` : '';
-            return `<div class="${classes}"${isChallenger ? ' data-role="challenger"' : ''}>
+            html += `<div class="${classes}">
                 <span class="pos">${entry.position}</span>
                 <span class="name">${esc(entry.player_name)}${partnerStr}</span>
                 ${confirmHtml}
             </div>`;
         }
 
-        // Output all items flat — CSS columns handles the wrapping
-        if (challenger) html += buildItem(challenger, true);
-        for (const entry of displayWaiting) html += buildItem(entry, false);
         if (overflow > 0) {
             html += `<div style="text-align:center;color:#555;font-style:italic;font-size:0.75rem;padding:4px 0;break-inside:avoid;">+${overflow} more</div>`;
         }
