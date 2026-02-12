@@ -93,15 +93,12 @@
         /* Main Content - Natural column flow: top-to-bottom, then next column */
         .main {
             flex: 1;
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            grid-template-rows: 1fr;
-            gap: 0 14px;
+            column-count: 2;
+            column-gap: 14px;
+            column-fill: auto;
             overflow: hidden;
-            min-height: 0;
             padding: 12px 16px;
         }
-        .queue-col { display: flex; flex-direction: column; gap: 4px; overflow: hidden; }
         .queue-label {
             font-size: 0.75rem; font-weight: 600; color: #555;
             text-transform: uppercase; letter-spacing: 1px;
@@ -111,6 +108,8 @@
         /* Challenger Card — just a queue-item with red accent */
         .challenger-card {
             border: 1px solid rgba(239,68,68,0.3);
+            break-inside: avoid;
+            margin-bottom: 4px;
         }
         .challenger-card .pos { color: #ef4444; }
         .challenger-card .name { color: #fff; font-weight: 600; }
@@ -129,7 +128,8 @@
             padding: 10px 12px;
             background: #141414;
             border-radius: 5px;
-            flex: 1;
+            margin-bottom: 4px;
+            break-inside: avoid;
             animation: slideIn 0.3s ease-out;
         }
         @keyframes slideIn {
@@ -478,7 +478,7 @@
 
         stateEmpty.classList.remove('active');
         headerEl.style.display = 'flex';
-        mainEl.style.display = 'grid';
+        mainEl.style.display = 'block';
         footerEl.style.display = 'flex';
 
         // King (position 1)
@@ -575,7 +575,6 @@
             }
 
             const partnerStr = entry.partner_name ? ` & ${esc(entry.partner_name)}` : '';
-            let extraHtml = '';
             return `<div class="${classes}"${isChallenger ? ' data-role="challenger"' : ''}>
                 <span class="pos">${entry.position}</span>
                 <span class="name">${esc(entry.player_name)}${partnerStr}</span>
@@ -583,25 +582,12 @@
             </div>`;
         }
 
-        // Combine challenger + queue into one flat list
-        const allItems = [];
-        if (challenger) allItems.push({ entry: challenger, isChallenger: true });
-        for (const entry of displayWaiting) allItems.push({ entry, isChallenger: false });
-
-        // Split: fill column 1 first, then column 2
-        const half = Math.ceil(allItems.length / 2);
-        const col1 = allItems.slice(0, half);
-        const col2 = allItems.slice(half);
-
-        html += '<div class="queue-col">';
-        for (const item of col1) html += buildItem(item.entry, item.isChallenger);
-        html += '</div>';
-        html += '<div class="queue-col">';
-        for (const item of col2) html += buildItem(item.entry, item.isChallenger);
+        // Output all items flat — CSS columns handles the wrapping
+        if (challenger) html += buildItem(challenger, true);
+        for (const entry of displayWaiting) html += buildItem(entry, false);
         if (overflow > 0) {
-            html += `<div style="text-align:center;color:#555;font-style:italic;font-size:0.75rem;padding:4px 0;">+${overflow} more</div>`;
+            html += `<div style="text-align:center;color:#555;font-style:italic;font-size:0.75rem;padding:4px 0;break-inside:avoid;">+${overflow} more</div>`;
         }
-        html += '</div>';
 
         // Only update DOM if content actually changed (prevents blink)
         if (mainEl.dataset.lastHtml !== html) {
