@@ -92,13 +92,12 @@
 
         /* Main Content - Natural column flow: top-to-bottom, then next column */
         .main {
-            flex: 1;
             display: block;
             column-count: 2;
             column-gap: 14px;
-            column-fill: auto;
+            column-fill: balance;
             overflow: hidden;
-            height: 100%;
+            height: calc(100vh - 140px);
             padding: 12px 16px;
         }
         .queue-label {
