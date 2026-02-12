@@ -574,14 +574,10 @@
 
             const partnerStr = entry.partner_name ? ` & ${esc(entry.partner_name)}` : '';
             let extraHtml = '';
-            if (isChallenger && queue.some(e => e.position === 2)) {
-                extraHtml = '<div class="hint" style="margin-left:30px;">← swipe if lost →</div>';
-            }
             return `<div class="${classes}"${isChallenger ? ' data-role="challenger"' : ''}>
                 <span class="pos">${entry.position}</span>
                 <span class="name">${esc(entry.player_name)}${partnerStr}</span>
                 ${confirmHtml}
-                ${extraHtml}
             </div>`;
         }
 
@@ -601,7 +597,7 @@
         html += '<div class="queue-col">';
         for (const item of col2) html += buildItem(item.entry, item.isChallenger);
         if (overflow > 0) {
-            html += `<div class="queue-item" style="justify-content:center;color:#555;font-style:italic;">+${overflow} more</div>`;
+            html += `<div style="text-align:center;color:#555;font-style:italic;font-size:0.75rem;padding:4px 0;">+${overflow} more</div>`;
         }
         html += '</div>';
 
