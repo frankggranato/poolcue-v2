@@ -93,10 +93,15 @@
         /* Main Content - Natural column flow: top-to-bottom, then next column */
         .main {
             display: flex;
-            gap: 14px;
+            flex-direction: column;
             overflow: hidden;
             height: calc(100vh - 140px);
             padding: 12px 16px;
+        }
+        .queue-columns {
+            display: flex;
+            flex: 1;
+            gap: 14px;
         }
         .queue-col {
             flex: 1;
@@ -116,7 +121,7 @@
             border: 1px solid rgba(239,68,68,0.3);
             border-radius: 5px;
             padding: 8px 12px;
-            flex: 1;
+            margin-bottom: 8px;
             transition: all 0.15s;
             animation: slideIn 0.3s ease-out;
         }
@@ -560,9 +565,8 @@
         const displayWaiting = waiting.slice(0, MAX_DISPLAY);
         const overflow = waiting.length - MAX_DISPLAY;
 
-        const allItems = [];
-
-        // Challenger card
+        // Challenger card (sits above both columns)
+        let challengerHtml = '';
         if (challenger) {
             const partnerStr = challenger.partner_name ? ` & ${esc(challenger.partner_name)}` : '';
             let chalStatusHtml = '';
@@ -575,17 +579,18 @@
             } else if (challenger.confirmation_sent_at) {
                 chalStatusHtml = '<span class="confirm-status">🟡 Waiting</span>';
             }
-            allItems.push(`<div class="challenger-card swipeable" data-role="challenger">
+            challengerHtml = `<div class="challenger-card swipeable" data-role="challenger">
                 <div class="name-row">
                     <span class="pos">2</span>
                     <span class="name">${esc(challenger.player_name)}${partnerStr}</span>
                     ${chalStatusHtml}
                 </div>
                 ${queue.some(e => e.position === 2) ? '<div class="hint">← swipe if lost →</div>' : ''}
-            </div>`);
+            </div>`;
         }
 
         // Queue items (capped at MAX_DISPLAY)
+        const queueItems = [];
         for (const entry of displayWaiting) {
             const isGhosted = entry.status === 'ghosted';
             const isMia = entry.status === 'mia';
@@ -607,7 +612,7 @@
             }
 
             const partnerStr = entry.partner_name ? ` & ${esc(entry.partner_name)}` : '';
-            allItems.push(`<div class="${classes}">
+            queueItems.push(`<div class="${classes}">
                 <span class="pos">${entry.position}</span>
                 <span class="name">${esc(entry.player_name)}${partnerStr}</span>
                 ${confirmHtml}
@@ -615,13 +620,16 @@
         }
 
         if (overflow > 0) {
-            allItems.push(`<div style="text-align:center;color:#555;font-style:italic;font-size:0.75rem;padding:4px 0;">+${overflow} more</div>`);
+            queueItems.push(`<div style="text-align:center;color:#555;font-style:italic;font-size:0.75rem;padding:4px 0;">+${overflow} more</div>`);
         }
 
-        // Split into two columns
-        const half = Math.ceil(allItems.length / 2);
-        const html = '<div class="queue-col">' + allItems.slice(0, half).join('') + '</div>'
-                   + '<div class="queue-col">' + allItems.slice(half).join('') + '</div>';
+        // Split queue items into two equal columns
+        const half = Math.ceil(queueItems.length / 2);
+        const html = challengerHtml
+                   + '<div class="queue-columns">'
+                   + '<div class="queue-col">' + queueItems.slice(0, half).join('') + '</div>'
+                   + '<div class="queue-col">' + queueItems.slice(half).join('') + '</div>'
+                   + '</div>';
 
         // Only update DOM if content actually changed (prevents blink)
         if (mainEl.dataset.lastHtml !== html) {
