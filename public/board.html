@@ -116,8 +116,6 @@
             border: 1px solid rgba(239,68,68,0.3);
             border-radius: 5px;
             padding: 8px 12px;
-            flex: 1;
-            max-height: 7vh;
             animation: slideIn 0.3s ease-out;
         }
         .challenger-card .name-row { display: flex; align-items: center; gap: 8px; }
@@ -139,8 +137,6 @@
             padding: 10px 12px;
             background: #141414;
             border-radius: 5px;
-            flex: 1;
-            max-height: 7vh;
             animation: slideIn 0.3s ease-out;
         }
         @keyframes slideIn {
@@ -557,7 +553,7 @@
         // Main content: challenger + queue
         const challenger = queue.find(e => e.position === 2);
         const waiting = queue.filter(e => e.position >= 3).sort((a, b) => a.position - b.position);
-        const MAX_DISPLAY = 20;
+        const MAX_DISPLAY = 30;
         const displayWaiting = waiting.slice(0, MAX_DISPLAY);
         const overflow = waiting.length - MAX_DISPLAY;
 
