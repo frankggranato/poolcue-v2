@@ -376,7 +376,7 @@
     <div class="debug-panel" id="debugPanel">
         <span class="debug-label">Debug</span>
         <button onclick="debugAddPlayer()">+ Player</button>
-        <button onclick="debugAddPlayer();debugAddPlayer();debugAddPlayer()">+ 3 Players</button>
+        <button onclick="debugAdd3()">+ 3 Players</button>
         <button onclick="debugSimResult('king-wins')">King Wins</button>
         <button onclick="debugSimResult('challenger-wins')">Challenger Wins</button>
         <button onclick="debugReset()">Reset Queue</button>
@@ -559,7 +559,7 @@
 
         // Main content: challenger + queue
         const challenger = queue.find(e => e.position === 2);
-        const waiting = queue.filter(e => e.position >= 3).sort((a, b) => a.position - b.position);
+        const waiting = queue.filter(e => e.position >= 3).sort((a, b) => a.position - b.position || a.id - b.id);
         const displayWaiting = waiting;
 
         // Challenger card (first item in column 1)
@@ -895,6 +895,11 @@
           body: JSON.stringify({ tableCode: TABLE_CODE })
         });
       } catch (err) { console.error(err); }
+    }
+    async function debugAdd3() {
+      await debugAddPlayer();
+      await debugAddPlayer();
+      await debugAddPlayer();
     }
     async function debugSimResult(result) {
       try {
