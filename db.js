@@ -486,12 +486,13 @@ async function undoLastRemoval(sessionId) {
 
   // The person who was promoted to pos 2 after the result needs to be
   // displaced — the original player is being restored to that slot.
+  // Set them to pos 3 (not 999) so compactPositions puts them right after the restored player.
   const promotedPlayer = queue.find(e => e.position === 2);
   if (promotedPlayer) {
     if (useMemory) {
-      promotedPlayer.position = 999; // temp — compactPositions will fix
+      promotedPlayer.position = 3;
     } else {
-      await pool.query('UPDATE queue_entries SET position = 999 WHERE id = $1', [promotedPlayer.id]);
+      await pool.query('UPDATE queue_entries SET position = 3 WHERE id = $1', [promotedPlayer.id]);
     }
   }
 
@@ -694,10 +695,9 @@ async function checkConfirmationTimeouts(sessionId) {
   const now = Date.now();
   const actions = [];
 
-  // STEP 1: Reset confirmation state for pos 1 ONLY (king is at the table)
-  // Pos 2 (challenger) KEEPS their status — king needs to see the color
+  // STEP 1: Reset confirmation state for pos 1-2 (they're at the table playing)
   for (const entry of queue) {
-    if (entry.position === 1 && (entry.status === 'confirmed' || entry.status === 'mia' || entry.status === 'ghosted' || entry.confirmation_sent_at)) {
+    if (entry.position <= 2 && (entry.status === 'confirmed' || entry.status === 'mia' || entry.status === 'ghosted' || entry.confirmation_sent_at)) {
       if (useMemory) {
         entry.status = 'waiting';
         entry.confirmation_sent_at = null;
@@ -713,9 +713,9 @@ async function checkConfirmationTimeouts(sessionId) {
     }
   }
 
-  // STEP 2: Status escalation for pos 2+ who were asked
+  // STEP 2: Status escalation for pos 3+ who were asked (pos 1-2 at table)
   for (const entry of queue) {
-    if (entry.position < 2) continue;
+    if (entry.position < 3) continue;
     if (entry.status === 'confirmed' || entry.status === 'ghosted') continue;
     if (!entry.confirmation_sent_at) continue;
 
@@ -732,9 +732,10 @@ async function checkConfirmationTimeouts(sessionId) {
     }
   }
 
-  // STEP 3: Ask positions 2-5 to confirm (if not already asked)
+  // STEP 3: Ask positions 3-5 to confirm (if not already asked)
+  // Pos 1-2 are at the table, no need to ask them
   const toAsk = queue.filter(e =>
-    e.position >= 2 && e.position <= 5
+    e.position >= 3 && e.position <= 5
     && e.status === 'waiting' && !e.confirmation_sent_at
   ).sort((a, b) => a.position - b.position);
 

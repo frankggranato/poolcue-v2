@@ -295,13 +295,14 @@ await test('Pos 2-5 asked on first check', async () => {
   const sid = await setup(7);
   await db.checkConfirmationTimeouts(sid);
   const q = await getQ(sid);
-  for (let p = 2; p <= 5; p++) {
+  for (let p = 3; p <= 5; p++) {
     const e = q.find(x => x.position === p);
     assert(!!e.confirmation_sent_at, `Pos ${p} asked`);
   }
   assert(!q.find(x => x.position === 6).confirmation_sent_at, 'Pos 6 NOT asked');
   assert(!q.find(x => x.position === 1).confirmation_sent_at, 'Pos 1 NOT asked');
-  console.log(`  T${testNum} ✓ Pos 2-5 asked, king and 6+ not`);
+  assert(!q.find(x => x.position === 2).confirmation_sent_at, 'Pos 2 NOT asked (at table)');
+  console.log(`  T${testNum} ✓ Pos 3-5 asked, king/challenger/6+ not`);
 });
 
 await test('Player confirms — status changes', async () => {
@@ -339,7 +340,7 @@ await test('Probably left after 10 min — still in queue', async () => {
   console.log(`  T${testNum} ✓ C red but still in line`);
 });
 
-await test('Confirmed player promoted — state carries to challenger', async () => {
+await test('Confirmed player promoted to challenger — status cleared (at table)', async () => {
   const sid = await setup(5);
   await db.checkConfirmationTimeouts(sid);
   await db.confirmPresence(sid, 'phone_C'); // C confirmed at pos 3
@@ -348,8 +349,8 @@ await test('Confirmed player promoted — state carries to challenger', async ()
   const q = await getQ(sid);
   const c = q.find(e => e.player_name === 'C');
   assert(c.position === 2, 'C challenger');
-  assert(c.status === 'confirmed', 'Confirmed status carries forward');
-  console.log(`  T${testNum} ✓ C promoted, still green`);
+  assert(c.status === 'waiting', 'Status cleared — challenger is at the table');
+  console.log(`  T${testNum} ✓ C promoted, status cleared (at table)`);
 });
 
 await test('New pos 3 gets asked after game ends', async () => {
@@ -770,9 +771,9 @@ await test('checkConfirmationTimeouts called 100 times (idempotent)', async () =
   const q = await getQ(sid);
   assert(q.length === 7, 'Still 7 players');
   q.forEach((e, i) => assert(e.position === i+1, 'Sequential'));
-  // Pos 2-5 asked exactly once (confirmation_sent_at set, not duplicated)
+  // Pos 3-5 asked exactly once (pos 1-2 at table, not asked)
   const asked = q.filter(e => !!e.confirmation_sent_at);
-  assert(asked.length === 4, 'Exactly 4 asked (pos 2-5)');
+  assert(asked.length === 3, 'Exactly 3 asked (pos 3-5)');
   console.log(`  T${testNum} ✓ 100 checks, idempotent`);
 });
 
