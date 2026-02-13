@@ -626,6 +626,29 @@
             mainEl.dataset.lastHtml = html;
             // Re-attach swipe handlers only to new challenger card (not king header)
             attachSwipeHandlers(mainEl);
+
+            // Fill remaining space with empty placeholder slots (like empty chalkboard lines)
+            requestAnimationFrame(() => {
+                const cols = mainEl.querySelectorAll('.queue-col');
+                let nextPos = displayWaiting.length + (challenger ? 2 : 1) + 1;
+                cols.forEach((col) => {
+                    const items = col.children;
+                    if (items.length === 0) return;
+                    const colRect = col.getBoundingClientRect();
+                    const lastItem = items[items.length - 1];
+                    const emptySpace = colRect.bottom - lastItem.getBoundingClientRect().bottom;
+                    const slotHeight = items[0].offsetHeight + 6;
+                    const slotsToFill = Math.floor(emptySpace / slotHeight);
+                    for (let i = 0; i < slotsToFill; i++) {
+                        const placeholder = document.createElement('div');
+                        placeholder.className = 'queue-item';
+                        placeholder.style.opacity = '0.15';
+                        placeholder.innerHTML = `<span class="pos">${nextPos}</span><span class="name">—</span>`;
+                        col.appendChild(placeholder);
+                        nextPos++;
+                    }
+                });
+            });
         }
     }
 
