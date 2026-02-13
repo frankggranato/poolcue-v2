@@ -37,7 +37,7 @@ PoolCue-v2/
 ├── package.json
 ├── .env.example        Environment variable template
 ├── public/
-│   ├── board.html      Touchscreen board (wood frame, 3-column layout)
+│   ├── board.html      Touchscreen board (wood frame, 2-column chalkboard layout)
 │   ├── status.html     Player phone: position, confirm button, controls
 │   ├── join.html       Player phone: join queue, see preview
 │   ├── setup.html      Bartender: PIN-gated session management

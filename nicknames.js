@@ -56,4 +56,4 @@ function suggest() {
   return names[Math.floor(Math.random() * names.length)];
 }
 
-module.exports = { suggest, names };
+module.exports = { suggest };
