@@ -117,6 +117,16 @@ async function createTables() {
     console.log('✅ Migration: fixed table_code unique constraint');
   }
 
+  // Migration: add queue_snapshot column to game_log (for true undo)
+  const snapCheck = await pool.query(`
+    SELECT column_name FROM information_schema.columns
+    WHERE table_name = 'game_log' AND column_name = 'queue_snapshot'
+  `);
+  if (snapCheck.rows.length === 0) {
+    await pool.query('ALTER TABLE game_log ADD COLUMN queue_snapshot JSONB');
+    console.log('✅ Migration: added queue_snapshot column to game_log');
+  }
+
   console.log('✅ Tables ready');
 }
 
@@ -342,6 +352,19 @@ async function recordResult(sessionId, result) {
   const challenger = queue.find(e => e.position === 2);
   if (!king || !challenger) return { error: 'need_two_players' };
 
+  // Snapshot the FULL queue state before making any changes.
+  // This enables true undo — restore to exact previous state.
+  const queueSnapshot = queue.map(e => ({
+    id: e.id,
+    position: e.position,
+    status: e.status,
+    win_streak: e.win_streak || 0,
+    confirmation_sent_at: e.confirmation_sent_at || null,
+    confirmed_at: e.confirmed_at || null,
+    mia_at: e.mia_at || null,
+    ghosted_at: e.ghosted_at || null,
+  }));
+
   // Calculate game duration for avg timer
   const lastGame = useMemory
     ? [...mem.game_log].filter(g => g.session_id === sessionId).pop()
@@ -403,19 +426,20 @@ async function recordResult(sessionId, result) {
   // and renumbers everyone sequentially
   await compactPositions(sessionId);
 
-  // Log the game
+  // Log the game (with snapshot for undo)
   if (useMemory) {
     mem.game_log.push({
       id: nextId('game_log'), session_id: sessionId,
       winner_name: winnerName, loser_name: loserName,
       winner_streak: winnerStreak, duration_seconds: duration,
-      counted_for_avg: countForAvg, ended_at: now
+      counted_for_avg: countForAvg, ended_at: now,
+      queue_snapshot: queueSnapshot
     });
   } else {
     await pool.query(
-      `INSERT INTO game_log (session_id, winner_name, loser_name, winner_streak, duration_seconds, counted_for_avg)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [sessionId, winnerName, loserName, winnerStreak, duration, countForAvg]
+      `INSERT INTO game_log (session_id, winner_name, loser_name, winner_streak, duration_seconds, counted_for_avg, queue_snapshot)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [sessionId, winnerName, loserName, winnerStreak, duration, countForAvg, JSON.stringify(queueSnapshot)]
     );
   }
 
@@ -441,8 +465,10 @@ async function getAvgGameTime(sessionId) {
 }
 
 async function undoLastRemoval(sessionId) {
-  // Use game log as source of truth — it records exactly who lost each game.
-  // This avoids relying on removed_at timestamps which can be identical for rapid games.
+  // TRUE UNDO: Restore the queue to the exact state before the last game result.
+  // Uses the snapshot saved in the game log — no reverse-engineering needed.
+
+  // 1. Get the last game log entry (has the snapshot)
   let lastLog;
   if (useMemory) {
     lastLog = [...mem.game_log].filter(g => g.session_id === sessionId).pop();
@@ -456,132 +482,76 @@ async function undoLastRemoval(sessionId) {
 
   if (!lastLog) return { error: 'nothing_to_undo' };
 
-  // Find the eliminated entry matching the loser from the last game
-  let entry;
-  if (useMemory) {
-    entry = mem.queue_entries.find(e =>
-      e.session_id === sessionId && e.status === 'eliminated' && e.player_name === lastLog.loser_name
-    );
-  } else {
-    const res = await pool.query(
-      `SELECT * FROM queue_entries
-       WHERE session_id = $1 AND status = 'eliminated' AND player_name = $2
-       ORDER BY removed_at DESC LIMIT 1`,
-      [sessionId, lastLog.loser_name]
-    );
-    entry = res.rows[0];
-  }
-
-  if (!entry) return { error: 'nothing_to_undo' };
-
-  // Only allow undo within 60 seconds
-  const elapsed = (Date.now() - new Date(entry.removed_at).getTime()) / 1000;
+  // 2. Check undo window (60 seconds from game end)
+  const elapsed = (Date.now() - new Date(lastLog.ended_at).getTime()) / 1000;
   if (elapsed > 60) return { error: 'undo_expired' };
 
-  const queue = await getQueue(sessionId);
+  // 3. Get the snapshot
+  const snapshot = lastLog.queue_snapshot;
+  if (!snapshot || snapshot.length === 0) return { error: 'nothing_to_undo' };
 
-  // Detect which result type occurred:
-  // entry.position === 1 means they were king who lost (challenger-wins)
-  // entry.position === 2 means they were challenger who lost (king-wins)
-  const wasKingWhoLost = entry.position === 1;
-  const currentKing = queue.find(e => e.position === 1);
+  const snapshotIds = new Set(snapshot.map(e => e.id));
+  const maxSnapshotPos = Math.max(...snapshot.map(e => e.position));
 
-  // The person who was promoted to pos 2 after the result needs to be
-  // displaced — the original player is being restored to that slot.
-  // Set them to pos 3 (not 999) so compactPositions puts them right after the restored player.
-  const promotedPlayer = queue.find(e => e.position === 2);
-  if (promotedPlayer) {
+  // 4. Restore every entry in the snapshot to its exact previous state
+  for (const snap of snapshot) {
     if (useMemory) {
-      promotedPlayer.position = 3;
-    } else {
-      await pool.query('UPDATE queue_entries SET position = 3 WHERE id = $1', [promotedPlayer.id]);
-    }
-  }
-
-  if (useMemory) {
-    if (wasKingWhoLost && currentKing) {
-      // Challenger-wins undo: former king gets restored to pos 1
-      currentKing.position = 2;
-      currentKing.win_streak = 0;
-      entry.status = 'waiting';
-      entry.position = 1;
-    } else {
-      // King-wins undo: restore challenger to pos 2
-      entry.status = 'waiting';
-      entry.position = 2;
-      if (currentKing && lastLog) {
-        currentKing.win_streak = Math.max(0, (currentKing.win_streak || 0) - 1);
+      // Find the entry (could be active or eliminated — search ALL entries)
+      const entry = mem.queue_entries.find(e => e.id === snap.id && e.session_id === sessionId);
+      if (entry) {
+        entry.position = snap.position;
+        entry.status = snap.status;
+        entry.win_streak = snap.win_streak;
+        entry.confirmation_sent_at = snap.confirmation_sent_at;
+        entry.confirmed_at = snap.confirmed_at;
+        entry.mia_at = snap.mia_at;
+        entry.ghosted_at = snap.ghosted_at;
+        entry.removed_at = null; // all snapshot entries were active
       }
-    }
-    entry.removed_at = null;
-    entry.confirmation_sent_at = null;
-    entry.confirmed_at = null;
-    entry.mia_at = null;
-    entry.ghosted_at = null;
-  } else {
-    // Restore the eliminated player first
-    await pool.query(
-      `UPDATE queue_entries SET status = 'waiting', removed_at = NULL,
-       confirmation_sent_at = NULL, confirmed_at = NULL, mia_at = NULL, ghosted_at = NULL WHERE id = $1`,
-      [entry.id]
-    );
-
-    if (wasKingWhoLost && currentKing) {
-      // Former challenger (current king) → pos 2 with streak 0
+    } else {
       await pool.query(
-        'UPDATE queue_entries SET position = 2, win_streak = 0 WHERE id = $1',
-        [currentKing.id]
+        `UPDATE queue_entries SET position = $1, status = $2, win_streak = $3,
+         confirmation_sent_at = $4, confirmed_at = $5, mia_at = $6, ghosted_at = $7,
+         removed_at = NULL
+         WHERE id = $8 AND session_id = $9`,
+        [snap.position, snap.status, snap.win_streak,
+         snap.confirmation_sent_at, snap.confirmed_at, snap.mia_at, snap.ghosted_at,
+         snap.id, sessionId]
       );
-      // Restored king → pos 1
-      await pool.query('UPDATE queue_entries SET position = 1 WHERE id = $1', [entry.id]);
-    } else {
-      // Restored challenger → pos 2
-      await pool.query('UPDATE queue_entries SET position = 2 WHERE id = $1', [entry.id]);
-      // Decrement king's streak
-      if (currentKing && lastLog) {
-        await pool.query(
-          'UPDATE queue_entries SET win_streak = GREATEST(0, win_streak - 1) WHERE id = $1',
-          [currentKing.id]
-        );
-      }
     }
   }
 
-  // Recompact all positions after the restored entry
-  await compactPositions(sessionId);
-
-  // Clear ALL confirmation states — undo is a clean revert.
-  // The regular 30s timer will re-ask the right positions.
-  const refreshedQueue = await getQueue(sessionId);
-  for (const e of refreshedQueue) {
-    if (e.confirmation_sent_at || e.status !== 'waiting') {
-      if (useMemory) {
-        e.status = 'waiting';
-        e.confirmation_sent_at = null;
-        e.confirmed_at = null;
-        e.mia_at = null;
-        e.ghosted_at = null;
-      } else {
-        await pool.query(
-          `UPDATE queue_entries SET status = 'waiting', confirmation_sent_at = NULL, confirmed_at = NULL, mia_at = NULL, ghosted_at = NULL WHERE id = $1`,
-          [e.id]
-        );
-      }
-    }
-  }
-
-  // Remove the game log entry too
+  // 5. Handle players who joined AFTER the game result (not in snapshot).
+  //    Keep them but place after the restored queue.
+  let nextPos = maxSnapshotPos + 1;
   if (useMemory) {
-    const logEntry = mem.game_log.filter(g => g.session_id === sessionId).pop();
-    if (logEntry) mem.game_log = mem.game_log.filter(g => g.id !== logEntry.id);
+    const newJoins = mem.queue_entries.filter(e =>
+      e.session_id === sessionId && !snapshotIds.has(e.id)
+      && !['eliminated', 'removed'].includes(e.status)
+    ).sort((a, b) => a.position - b.position);
+    for (const entry of newJoins) {
+      entry.position = nextPos++;
+    }
   } else {
-    await pool.query(
-      'DELETE FROM game_log WHERE id = (SELECT id FROM game_log WHERE session_id = $1 ORDER BY ended_at DESC LIMIT 1)',
-      [sessionId]
+    const newRes = await pool.query(
+      `SELECT id FROM queue_entries WHERE session_id = $1
+       AND id != ALL($2) AND status NOT IN ('eliminated', 'removed')
+       ORDER BY position ASC`,
+      [sessionId, Array.from(snapshotIds)]
     );
+    for (const row of newRes.rows) {
+      await pool.query('UPDATE queue_entries SET position = $1 WHERE id = $2', [nextPos++, row.id]);
+    }
   }
 
-  return { success: true, restored: entry.player_name };
+  // 6. Delete the game log entry
+  if (useMemory) {
+    mem.game_log = mem.game_log.filter(g => g.id !== lastLog.id);
+  } else {
+    await pool.query('DELETE FROM game_log WHERE id = $1', [lastLog.id]);
+  }
+
+  return { success: true, restored: lastLog.loser_name };
 }
 
 async function leaveQueue(sessionId, phoneId) {
