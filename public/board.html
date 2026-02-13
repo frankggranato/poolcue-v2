@@ -86,37 +86,47 @@
         .rules { display: flex; gap: 6px; margin-top: 8px; }
         .rule-tag { padding: 4px 10px; background: #1a1a1a; border-radius: 4px; font-size: 0.7rem; color: #888; font-weight: 500; }
         .qr-section { text-align: center; flex-shrink: 0; }
-        .qr-frame {
-            background: #f5c518;
-            border-radius: 12px;
-            padding: 3px;
-            position: relative;
-        }
-        .qr-scan-label {
-            background: #f5c518;
-            color: #000;
-            font-size: 0.95rem;
-            font-weight: 800;
-            letter-spacing: 2px;
-            text-transform: uppercase;
-            padding: 5px 0 2px;
-            border-radius: 10px 10px 0 0;
-        }
-        .qr-arrow {
-            width: 0; height: 0;
-            border-left: 10px solid transparent;
-            border-right: 10px solid transparent;
-            border-top: 10px solid #f5c518;
-            margin: 0 auto;
-            position: relative;
-            z-index: 1;
-        }
-        .qr-inner {
-            background: #fff;
-            padding: 8px;
-            border-radius: 0 0 9px 9px;
-        }
+        .qr-box { background: #fff; padding: 10px; border-radius: 8px; }
         .qr-code { width: 130px; height: 130px; display: block; }
+        .neon-label {
+            margin-top: 10px;
+            font-family: 'Inter', sans-serif;
+            font-size: 1.1rem;
+            font-weight: 700;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: #fff;
+            text-shadow:
+                0 0 4px #fff,
+                0 0 11px #fff,
+                0 0 19px #fff,
+                0 0 40px #f5c518,
+                0 0 80px #f5c518,
+                0 0 90px #f5c518,
+                0 0 100px #f5c518,
+                0 0 150px #f5c518;
+            animation: neonFlicker 4s ease-in-out infinite;
+        }
+        @keyframes neonFlicker {
+            0%, 100% { opacity: 1; }
+            92% { opacity: 1; }
+            93% { opacity: 0.7; }
+            94% { opacity: 1; }
+            96% { opacity: 0.8; }
+            97% { opacity: 1; }
+        }
+        .neon-arrow {
+            font-size: 1rem;
+            margin-top: 2px;
+            color: #fff;
+            text-shadow:
+                0 0 4px #fff,
+                0 0 11px #fff,
+                0 0 40px #f5c518,
+                0 0 80px #f5c518;
+            animation: neonFlicker 4s ease-in-out infinite;
+            animation-delay: 0.5s;
+        }
 
         /* Main Content - Natural column flow: top-to-bottom, then next column */
         .main {
@@ -341,13 +351,11 @@
                     </div>
                 </div>
                 <div class="qr-section">
-                    <div class="qr-frame">
-                        <div class="qr-scan-label">SCAN ME</div>
-                        <div class="qr-inner">
-                            <img id="qrImg" src="" class="qr-code" alt="QR">
-                        </div>
+                    <div class="qr-box">
+                        <img id="qrImg" src="" class="qr-code" alt="QR">
                     </div>
-                    <div class="qr-arrow"></div>
+                    <div class="neon-label">SCAN ME</div>
+                    <div class="neon-arrow">▲</div>
                 </div>
             </div>
 
