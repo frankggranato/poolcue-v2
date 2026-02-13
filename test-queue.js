@@ -709,6 +709,45 @@ await test('Record result, undo, record result, undo, record result', async () =
   console.log(`  T${testNum} ✓ Multiple undo cycles: ${names(q)}`);
 });
 
+await test('Multiple undos clear all confirmation states (clean revert)', async () => {
+  const sid = await setup(8);
+  // Trigger confirmations so pos 3-5 get asked
+  await db.checkConfirmationTimeouts(sid);
+  let q = await getQ(sid);
+  assert(q.filter(e => !!e.confirmation_sent_at).length === 3, '3 asked before games');
+
+  // Play 3 games
+  await db.recordResult(sid, 'king-wins'); // B out
+  await db.checkConfirmationTimeouts(sid);
+  await db.recordResult(sid, 'king-wins'); // C out
+  await db.checkConfirmationTimeouts(sid);
+  await db.recordResult(sid, 'king-wins'); // D out
+
+  // Undo all 3
+  await db.undoLastRemoval(sid); // D back
+  q = await getQ(sid);
+  const asked1 = q.filter(e => !!e.confirmation_sent_at);
+  assert(asked1.length === 0, 'Undo 1: all confirmation states cleared');
+
+  await db.undoLastRemoval(sid); // C back
+  q = await getQ(sid);
+  const asked2 = q.filter(e => !!e.confirmation_sent_at);
+  assert(asked2.length === 0, 'Undo 2: all confirmation states cleared');
+
+  await db.undoLastRemoval(sid); // B back
+  q = await getQ(sid);
+  const asked3 = q.filter(e => !!e.confirmation_sent_at);
+  assert(asked3.length === 0, 'Undo 3: all confirmation states cleared');
+
+  // Verify order is fully restored
+  assert(q[0].player_name === 'A', 'A king');
+  assert(q[1].player_name === 'B', 'B challenger');
+  assert(q[2].player_name === 'C', 'C pos 3');
+  assert(q[3].player_name === 'D', 'D pos 4');
+  q.forEach((e, i) => assert(e.position === i+1, 'Sequential'));
+  console.log(`  T${testNum} ✓ 3 games + 3 undos: clean revert, no stale labels`);
+});
+
 await test('All positions 3-5 ghosted, game ends — FIFO still promotes them', async () => {
   const sid = await setup(7);
   await db.checkConfirmationTimeouts(sid);

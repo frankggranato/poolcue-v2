@@ -441,19 +441,33 @@ async function getAvgGameTime(sessionId) {
 }
 
 async function undoLastRemoval(sessionId) {
-  // Find the most recently eliminated player
+  // Use game log as source of truth — it records exactly who lost each game.
+  // This avoids relying on removed_at timestamps which can be identical for rapid games.
+  let lastLog;
+  if (useMemory) {
+    lastLog = [...mem.game_log].filter(g => g.session_id === sessionId).pop();
+  } else {
+    const logRes = await pool.query(
+      'SELECT * FROM game_log WHERE session_id = $1 ORDER BY ended_at DESC LIMIT 1',
+      [sessionId]
+    );
+    lastLog = logRes.rows[0];
+  }
+
+  if (!lastLog) return { error: 'nothing_to_undo' };
+
+  // Find the eliminated entry matching the loser from the last game
   let entry;
   if (useMemory) {
-    const eliminated = mem.queue_entries
-      .filter(e => e.session_id === sessionId && e.status === 'eliminated')
-      .sort((a, b) => new Date(b.removed_at) - new Date(a.removed_at));
-    entry = eliminated[0];
+    entry = mem.queue_entries.find(e =>
+      e.session_id === sessionId && e.status === 'eliminated' && e.player_name === lastLog.loser_name
+    );
   } else {
     const res = await pool.query(
       `SELECT * FROM queue_entries
-       WHERE session_id = $1 AND status = 'eliminated'
+       WHERE session_id = $1 AND status = 'eliminated' AND player_name = $2
        ORDER BY removed_at DESC LIMIT 1`,
-      [sessionId]
+      [sessionId, lastLog.loser_name]
     );
     entry = res.rows[0];
   }
@@ -465,18 +479,6 @@ async function undoLastRemoval(sessionId) {
   if (elapsed > 60) return { error: 'undo_expired' };
 
   const queue = await getQueue(sessionId);
-
-  // Read game log before deleting to reverse streak
-  let lastLog;
-  if (useMemory) {
-    lastLog = [...mem.game_log].filter(g => g.session_id === sessionId).pop();
-  } else {
-    const logRes = await pool.query(
-      'SELECT * FROM game_log WHERE session_id = $1 ORDER BY ended_at DESC LIMIT 1',
-      [sessionId]
-    );
-    lastLog = logRes.rows[0];
-  }
 
   // Detect which result type occurred:
   // entry.position === 1 means they were king who lost (challenger-wins)
@@ -547,6 +549,26 @@ async function undoLastRemoval(sessionId) {
 
   // Recompact all positions after the restored entry
   await compactPositions(sessionId);
+
+  // Clear ALL confirmation states — undo is a clean revert.
+  // The regular 30s timer will re-ask the right positions.
+  const refreshedQueue = await getQueue(sessionId);
+  for (const e of refreshedQueue) {
+    if (e.confirmation_sent_at || e.status !== 'waiting') {
+      if (useMemory) {
+        e.status = 'waiting';
+        e.confirmation_sent_at = null;
+        e.confirmed_at = null;
+        e.mia_at = null;
+        e.ghosted_at = null;
+      } else {
+        await pool.query(
+          `UPDATE queue_entries SET status = 'waiting', confirmation_sent_at = NULL, confirmed_at = NULL, mia_at = NULL, ghosted_at = NULL WHERE id = $1`,
+          [e.id]
+        );
+      }
+    }
+  }
 
   // Remove the game log entry too
   if (useMemory) {

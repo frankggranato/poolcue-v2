@@ -290,7 +290,8 @@ app.post('/api/undo', async (req, res) => {
     if (result.error) return res.status(400).json(result);
     await broadcastQueueUpdate(tableCode);
     res.json(result);
-    triggerConfirmations(tableCode).catch(() => {});
+    // NO triggerConfirmations here — undo is a clean revert.
+    // The regular 30s timer will re-ask the right positions.
   } catch (err) {
     console.error('POST /api/undo error:', err);
     res.status(500).json({ error: 'server_error' });
