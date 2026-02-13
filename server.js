@@ -390,9 +390,6 @@ app.get('/api/suggest-name', (req, res) => {
 
 // Debug: add a fake player (for testing queue flow — disabled in production)
 app.post('/api/debug/add-fake', async (req, res) => {
-  if (process.env.NODE_ENV === 'production') {
-    return res.status(403).json({ error: 'debug_disabled' });
-  }
   try {
     const { tableCode } = req.body;
     const session = await db.ensureSession(tableCode);
