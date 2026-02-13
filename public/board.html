@@ -88,44 +88,82 @@
         .qr-section { text-align: center; flex-shrink: 0; }
         .qr-box { background: #fff; padding: 10px; border-radius: 8px; }
         .qr-code { width: 130px; height: 130px; display: block; }
-        .neon-label {
-            margin-top: 10px;
+        .neon-sign {
+            margin-top: 8px;
+            position: relative;
+            padding: 6px 0;
+        }
+        .neon-text {
             font-family: 'Inter', sans-serif;
-            font-size: 1.1rem;
+            font-size: 1.15rem;
             font-weight: 700;
-            letter-spacing: 3px;
+            letter-spacing: 4px;
             text-transform: uppercase;
             color: #fff;
+            -webkit-text-stroke: 0.5px rgba(255,120,20,0.3);
             text-shadow:
-                0 0 4px #fff,
-                0 0 11px #fff,
-                0 0 19px #fff,
-                0 0 40px #f5c518,
-                0 0 80px #f5c518,
-                0 0 90px #f5c518,
-                0 0 100px #f5c518,
-                0 0 150px #f5c518;
-            animation: neonFlicker 4s ease-in-out infinite;
-        }
-        @keyframes neonFlicker {
-            0%, 100% { opacity: 1; }
-            92% { opacity: 1; }
-            93% { opacity: 0.7; }
-            94% { opacity: 1; }
-            96% { opacity: 0.8; }
-            97% { opacity: 1; }
+                0 0 3px #fff,
+                0 0 7px #fff,
+                0 0 12px #ff8c1a,
+                0 0 22px #ff6600,
+                0 0 40px #ff6600,
+                0 0 55px #ff4500,
+                0 0 75px #ff4500,
+                0 0 100px rgba(255,69,0,0.4);
+            animation: neonPulse 3s ease-in-out infinite alternate;
         }
         .neon-arrow {
-            font-size: 1rem;
-            margin-top: 2px;
-            color: #fff;
-            text-shadow:
-                0 0 4px #fff,
-                0 0 11px #fff,
-                0 0 40px #f5c518,
-                0 0 80px #f5c518;
-            animation: neonFlicker 4s ease-in-out infinite;
-            animation-delay: 0.5s;
+            display: block;
+            margin: 4px auto 0;
+            width: 20px;
+            height: 24px;
+            position: relative;
+        }
+        .neon-arrow::before {
+            content: '';
+            position: absolute;
+            left: 50%;
+            bottom: 0;
+            transform: translateX(-50%);
+            width: 3px;
+            height: 16px;
+            background: #fff;
+            border-radius: 2px;
+            box-shadow:
+                0 0 3px #fff,
+                0 0 7px #fff,
+                0 0 12px #ff8c1a,
+                0 0 22px #ff6600,
+                0 0 40px #ff4500;
+            animation: neonPulse 3s ease-in-out infinite alternate;
+        }
+        .neon-arrow::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%) rotate(45deg);
+            width: 12px;
+            height: 12px;
+            border-top: 3px solid #fff;
+            border-right: 3px solid #fff;
+            border-radius: 2px;
+            box-shadow:
+                0 0 3px #fff,
+                0 0 7px #fff,
+                0 0 12px #ff8c1a,
+                0 0 22px #ff6600;
+            animation: neonPulse 3s ease-in-out infinite alternate;
+        }
+        @keyframes neonPulse {
+            0% { opacity: 1; filter: brightness(1); }
+            50% { opacity: 0.95; filter: brightness(1.05); }
+            85% { opacity: 1; filter: brightness(1); }
+            87% { opacity: 0.7; filter: brightness(0.8); }
+            89% { opacity: 1; filter: brightness(1.1); }
+            91% { opacity: 0.85; filter: brightness(0.9); }
+            93% { opacity: 1; filter: brightness(1); }
+            100% { opacity: 1; filter: brightness(1.02); }
         }
 
         /* Main Content - Natural column flow: top-to-bottom, then next column */
@@ -354,8 +392,10 @@
                     <div class="qr-box">
                         <img id="qrImg" src="" class="qr-code" alt="QR">
                     </div>
-                    <div class="neon-label">SCAN ME</div>
-                    <div class="neon-arrow">▲</div>
+                    <div class="neon-sign">
+                        <span class="neon-arrow"></span>
+                        <div class="neon-text">SCAN ME</div>
+                    </div>
                 </div>
             </div>
 
