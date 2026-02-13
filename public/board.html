@@ -560,9 +560,7 @@
         // Main content: challenger + queue
         const challenger = queue.find(e => e.position === 2);
         const waiting = queue.filter(e => e.position >= 3).sort((a, b) => a.position - b.position);
-        const MAX_DISPLAY = 50;
-        const displayWaiting = waiting.slice(0, MAX_DISPLAY);
-        const overflow = waiting.length - MAX_DISPLAY;
+        const displayWaiting = waiting;
 
         // Challenger card (first item in column 1)
         let challengerHtml = '';
@@ -618,10 +616,6 @@
             </div>`);
         }
 
-        if (overflow > 0) {
-            queueItems.push(`<div style="text-align:center;color:#555;font-style:italic;font-size:0.75rem;padding:4px 0;">+${overflow} more</div>`);
-        }
-
         // Output all items sequentially - CSS flex-wrap handles the two columns
         const html = challengerHtml + queueItems.join('');
 
@@ -633,19 +627,44 @@
             attachSwipeHandlers(mainEl);
 
             // Fill remaining space with empty placeholder slots (like empty chalkboard lines)
+            // Also trim any items that overflow the container and show "+X more"
             requestAnimationFrame(() => {
-                const allItems = mainEl.querySelectorAll('.queue-item, .challenger-card');
+                const allItems = Array.from(mainEl.querySelectorAll('.queue-item, .challenger-card'));
                 if (allItems.length === 0) return;
                 const mainRect = mainEl.getBoundingClientRect();
-                const itemHeight = allItems[0].offsetHeight + 6; // item + gap
-                let nextPos = displayWaiting.length + (challenger ? 2 : 1) + 1;
+                const itemHeight = allItems[0].offsetHeight + 6;
+
+                // Remove items that overflow the container (off-screen right or below)
+                let hiddenCount = 0;
+                for (let i = allItems.length - 1; i >= 0; i--) {
+                    const rect = allItems[i].getBoundingClientRect();
+                    if (rect.right > mainRect.right || rect.bottom > mainRect.bottom) {
+                        allItems[i].remove();
+                        hiddenCount++;
+                    }
+                }
+
+                // Show "+X more" if items were hidden
+                if (hiddenCount > 0) {
+                    // Remove last visible item in column 2 to make room
+                    const remaining = Array.from(mainEl.querySelectorAll('.queue-item, .challenger-card'));
+                    const lastItem = remaining[remaining.length - 1];
+                    if (lastItem) { lastItem.remove(); hiddenCount++; }
+                    const overflow = document.createElement('div');
+                    overflow.className = 'queue-item';
+                    overflow.style.cssText = 'text-align:center;color:#888;font-style:italic;font-size:0.85rem;justify-content:center;';
+                    overflow.textContent = `+${hiddenCount} more`;
+                    mainEl.appendChild(overflow);
+                    return; // board is full, no placeholders needed
+                }
+
+                // Fill remaining space with placeholder slots
+                let nextPos = displayWaiting.length + (challenger ? 3 : 2);
                 let safety = 0;
                 while (safety < 100) {
                     const lastItem = mainEl.lastElementChild;
                     if (!lastItem) break;
-                    const lastRect = lastItem.getBoundingClientRect();
-                    // Stop if the last item is near the bottom of the container
-                    if (mainRect.bottom - lastRect.bottom < itemHeight) break;
+                    if (mainRect.bottom - lastItem.getBoundingClientRect().bottom < itemHeight) break;
                     const placeholder = document.createElement('div');
                     placeholder.className = 'queue-item';
                     placeholder.style.opacity = '0.15';
