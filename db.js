@@ -263,8 +263,8 @@ async function compactPositions(sessionId) {
   const queue = await getQueue(sessionId);
   if (queue.length === 0) return;
 
-  // Sort by current position — preserves join order
-  const sorted = [...queue].sort((a, b) => a.position - b.position);
+  // Sort by current position, then by join time to break ties (concurrent adds get same position)
+  const sorted = [...queue].sort((a, b) => a.position - b.position || new Date(a.joined_at) - new Date(b.joined_at) || a.id - b.id);
 
   // === PURE FIFO PROMOTION ===
   // Queue order is king. Confirmation is informational only (helps bartender
