@@ -249,10 +249,12 @@ app.post('/api/result', async (req, res) => {
     const outcome = await db.recordResult(session.id, result);
     if (outcome.error) return res.status(400).json(outcome);
 
-    // Trigger confirmations for newly promoted players
-    await triggerConfirmations(tableCode);
+    // Broadcast queue update FIRST so board updates instantly
     await broadcastQueueUpdate(tableCode);
     res.json(outcome);
+
+    // Then trigger confirmations in the background (non-blocking)
+    triggerConfirmations(tableCode).catch(() => {});
   } catch (err) {
     console.error('POST /api/result error:', err);
     res.status(500).json({ error: 'server_error' });
@@ -286,9 +288,9 @@ app.post('/api/undo', async (req, res) => {
     if (!session) return res.status(404).json({ error: 'no_session' });
     const result = await db.undoLastRemoval(session.id);
     if (result.error) return res.status(400).json(result);
-    await triggerConfirmations(tableCode);
     await broadcastQueueUpdate(tableCode);
     res.json(result);
+    triggerConfirmations(tableCode).catch(() => {});
   } catch (err) {
     console.error('POST /api/undo error:', err);
     res.status(500).json({ error: 'server_error' });
