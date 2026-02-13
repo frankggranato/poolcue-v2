@@ -22,6 +22,7 @@ const wss = new WebSocketServer({ server });
 const PORT = process.env.PORT || 3000;
 const BASE_URL = process.env.BASE_URL || `http://localhost:${PORT}`;
 const SESSION_PIN = process.env.SESSION_PIN || '0000';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'poolcue2026';
 
 // Simple rate limiter (in-memory)
 const rateLimits = new Map(); // key -> { count, resetAt }
@@ -45,7 +46,7 @@ setInterval(() => {
 }, 300000);
 
 // Middleware
-app.use(express.json());
+app.use(express.json({ limit: '5mb' }));
 app.use(cookieParser());
 app.use(express.static('public'));
 
@@ -422,6 +423,135 @@ app.get('/qr/:tableCode', async (req, res) => {
     console.error('QR generation error:', err);
     res.status(500).send('QR error');
   }
+});
+
+// ============================================
+// Admin panel
+// ============================================
+
+app.get('/admin', (req, res) => {
+  res.sendFile(__dirname + '/public/admin.html');
+});
+
+// Admin auth check middleware
+function adminAuth(req, res, next) {
+  const pw = req.headers['x-admin-password'] || req.body?.adminPassword;
+  if (pw !== ADMIN_PASSWORD) return res.status(403).json({ error: 'bad_password' });
+  next();
+}
+
+// --- Bars ---
+app.get('/api/admin/bars', adminAuth, async (req, res) => {
+  try {
+    res.json({ bars: await db.getAllBars() });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'server_error' }); }
+});
+
+app.post('/api/admin/bars', adminAuth, async (req, res) => {
+  try {
+    const { name, slug, address, contactName, contactPhone } = req.body;
+    if (!name?.trim() || !slug?.trim()) return res.status(400).json({ error: 'name_and_slug_required' });
+    const clean = slug.toLowerCase().replace(/[^a-z0-9-]/g, '');
+    const existing = await db.getBarBySlug(clean);
+    if (existing) return res.status(400).json({ error: 'slug_taken' });
+    const bar = await db.createBar(name.trim(), clean, address, contactName, contactPhone);
+    res.json({ success: true, bar });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'server_error' }); }
+});
+
+app.put('/api/admin/bars/:id', adminAuth, async (req, res) => {
+  try {
+    const bar = await db.updateBar(parseInt(req.params.id), req.body);
+    if (!bar) return res.status(404).json({ error: 'not_found' });
+    res.json({ success: true, bar });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'server_error' }); }
+});
+
+// --- Ads ---
+app.get('/api/admin/ads', adminAuth, async (req, res) => {
+  try {
+    const ads = await db.getAds();
+    // Include targets for each ad
+    const adsWithTargets = [];
+    for (const ad of ads) {
+      const targets = await db.getAdTargets(ad.id);
+      adsWithTargets.push({ ...ad, target_bar_ids: targets });
+    }
+    res.json({ ads: adsWithTargets });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'server_error' }); }
+});
+
+app.post('/api/admin/ads', adminAuth, async (req, res) => {
+  try {
+    const { advertiserName, imageData, imageType, startDate, endDate, targetBarIds } = req.body;
+    if (!advertiserName?.trim() || !imageData) return res.status(400).json({ error: 'name_and_image_required' });
+    const ad = await db.createAd(advertiserName.trim(), imageData, imageType, startDate, endDate);
+    if (targetBarIds?.length) await db.setAdTargets(ad.id, targetBarIds);
+    res.json({ success: true, ad });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'server_error' }); }
+});
+
+app.put('/api/admin/ads/:id', adminAuth, async (req, res) => {
+  try {
+    const adId = parseInt(req.params.id);
+    const { targetBarIds, ...fields } = req.body;
+    const ad = await db.updateAd(adId, fields);
+    if (!ad) return res.status(404).json({ error: 'not_found' });
+    if (targetBarIds) await db.setAdTargets(adId, targetBarIds);
+    res.json({ success: true, ad });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'server_error' }); }
+});
+
+app.delete('/api/admin/ads/:id', adminAuth, async (req, res) => {
+  try {
+    await db.deleteAd(parseInt(req.params.id));
+    res.json({ success: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'server_error' }); }
+});
+
+// --- Impressions report ---
+app.get('/api/admin/impressions', adminAuth, async (req, res) => {
+  try {
+    res.json({ report: await db.getImpressionReport() });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'server_error' }); }
+});
+
+// ============================================
+// Ad serving (public — called by board)
+// ============================================
+
+app.get('/api/ads/:tableCode', async (req, res) => {
+  try {
+    const bar = await db.getBarForTableCode(req.params.tableCode);
+    if (!bar) return res.json({ ads: [] });
+    const ads = await db.getAdsForBar(bar.id);
+    // Send ads without full base64 data — just metadata + image URL
+    const adList = ads.map(a => ({
+      id: a.id, advertiser_name: a.advertiser_name,
+      image_url: `/api/ads/image/${a.id}`
+    }));
+    res.json({ ads: adList, bar_id: bar.id });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'server_error' }); }
+});
+
+// Serve ad image (avoids sending base64 over WS)
+app.get('/api/ads/image/:id', async (req, res) => {
+  try {
+    const ad = await db.getAd(parseInt(req.params.id));
+    if (!ad || !ad.image_data) return res.status(404).send('Not found');
+    const buf = Buffer.from(ad.image_data, 'base64');
+    res.type(ad.image_type).send(buf);
+  } catch (err) { res.status(500).send('Error'); }
+});
+
+// Log impression
+app.post('/api/ads/impression', async (req, res) => {
+  try {
+    const { adId, barId } = req.body;
+    if (!adId || !barId) return res.status(400).json({ error: 'missing_fields' });
+    await db.logImpression(adId, barId);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: 'server_error' }); }
 });
 
 // ============================================

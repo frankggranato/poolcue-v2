@@ -53,6 +53,7 @@
             border-radius: 4px;
             display: flex; flex-direction: column;
             overflow: hidden;
+            position: relative;
             box-shadow: inset 0 0 20px rgba(0,0,0,0.5);
         }
         #board-content {
@@ -272,6 +273,35 @@
         body.kiosk .frame::before { top: 8px; left: 8px; right: 8px; bottom: 8px; }
         body.kiosk .board { border-radius: 0; }
 
+        /* Ad banner (shown during active games) */
+        .ad-banner {
+            width: 100%; height: 90px;
+            background: #0a0a0a;
+            display: none; align-items: center; justify-content: center;
+            overflow: hidden; flex-shrink: 0;
+            border-top: 1px solid rgba(255,255,255,0.04);
+        }
+        .ad-banner img {
+            max-width: 100%; max-height: 100%;
+            object-fit: contain;
+            transition: opacity 0.6s ease;
+        }
+        .ad-banner img.fade-out { opacity: 0; }
+
+        /* Idle ad overlay (shown when no games active) */
+        .idle-ad-overlay {
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            display: none; align-items: center; justify-content: center;
+            background: #0c0c0c; z-index: 10;
+        }
+        .idle-ad-overlay.active { display: flex; }
+        .idle-ad-overlay img {
+            max-width: 100%; max-height: 100%;
+            object-fit: contain;
+            transition: opacity 0.8s ease;
+        }
+        .idle-ad-overlay img.fade-out { opacity: 0; }
+
         /* Debug panel */
         .debug-panel {
             position: fixed; bottom: 0; left: 0; right: 0;
@@ -344,6 +374,16 @@
                 </div>
                 <div class="welcome-cta">Scan with your phone's camera</div>
             </div>
+        </div>
+
+        <!-- Ad banner (bottom strip during active games) -->
+        <div class="ad-banner" id="adBanner">
+            <img id="adBannerImg" src="" alt="">
+        </div>
+
+        <!-- Idle ad overlay (full screen when no games) -->
+        <div class="idle-ad-overlay" id="idleAdOverlay">
+            <img id="idleAdImg" src="" alt="">
         </div>
 
         <div class="footer">
@@ -471,6 +511,7 @@
             footerEl.style.display = 'none';
             stateEmpty.classList.remove('active');
             stateWelcome.classList.add('active');
+            updateAdState(true);
             return;
         }
         stateWelcome.classList.remove('active');
@@ -487,6 +528,7 @@
             document.getElementById('winStreak').style.display = 'none';
             document.getElementById('kingHint').style.display = 'none';
             renderRules();
+            updateAdState(true);
             return;
         }
 
@@ -494,6 +536,7 @@
         headerEl.style.display = 'flex';
         mainEl.style.display = 'flex';
         footerEl.style.display = 'flex';
+        updateAdState(false);
 
         // King (position 1)
         const king = queue.find(e => e.position === 1);
@@ -826,6 +869,111 @@
 
     // Wake Lock — keeps screen on in kiosk mode
     let wakeLock = null;
+    // ============================================
+    // Ad system
+    // ============================================
+
+    let adList = [];       // ads available for this board
+    let adBarId = null;    // bar ID for impression logging
+    let adIndex = 0;       // current ad in rotation
+    let adBannerTimer = null;
+    let adIdleTimer = null;
+    let boardIsIdle = true; // tracks whether queue is active
+
+    async function loadAds() {
+        try {
+            const res = await fetch(`/api/ads/${TABLE_CODE}`);
+            const data = await res.json();
+            adList = data.ads || [];
+            adBarId = data.bar_id || null;
+            adIndex = 0;
+            if (adList.length > 0) startAdRotation();
+        } catch (e) { /* ads failing should never break the board */ }
+    }
+
+    function startAdRotation() {
+        if (adList.length === 0) return;
+        showCurrentAd();
+        // Rotate every 25s for banner, 12s for idle
+        clearInterval(adBannerTimer);
+        clearInterval(adIdleTimer);
+        adBannerTimer = setInterval(() => {
+            if (!boardIsIdle) rotateAd('banner');
+        }, 25000);
+        adIdleTimer = setInterval(() => {
+            if (boardIsIdle) rotateAd('idle');
+        }, 12000);
+    }
+
+    function rotateAd(placement) {
+        if (adList.length === 0) return;
+        adIndex = (adIndex + 1) % adList.length;
+        showCurrentAd(placement);
+    }
+
+    function showCurrentAd(placement) {
+        if (adList.length === 0) return;
+        const ad = adList[adIndex];
+
+        if (!boardIsIdle || placement === 'banner') {
+            // Banner mode
+            const img = document.getElementById('adBannerImg');
+            img.classList.add('fade-out');
+            setTimeout(() => {
+                img.src = ad.image_url;
+                img.onload = () => img.classList.remove('fade-out');
+            }, 300);
+        }
+
+        if (boardIsIdle || placement === 'idle') {
+            // Idle full-screen mode
+            const img = document.getElementById('idleAdImg');
+            img.classList.add('fade-out');
+            setTimeout(() => {
+                img.src = ad.image_url;
+                img.onload = () => img.classList.remove('fade-out');
+            }, 400);
+        }
+
+        logImpression(ad.id);
+    }
+
+    function logImpression(adId) {
+        if (!adBarId) return;
+        fetch('/api/ads/impression', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ adId, barId: adBarId })
+        }).catch(() => {}); // fire and forget
+    }
+
+    function updateAdState(isIdle) {
+        const banner = document.getElementById('adBanner');
+        const overlay = document.getElementById('idleAdOverlay');
+        boardIsIdle = isIdle;
+
+        if (adList.length === 0) {
+            banner.style.display = 'none';
+            overlay.classList.remove('active');
+            return;
+        }
+
+        if (isIdle) {
+            banner.style.display = 'none';
+            overlay.classList.add('active');
+            showCurrentAd('idle');
+        } else {
+            overlay.classList.remove('active');
+            banner.style.display = 'flex';
+            showCurrentAd('banner');
+        }
+    }
+
+    // Load ads on startup
+    loadAds();
+    // Refresh ad list every 5 minutes (picks up new ads without board restart)
+    setInterval(loadAds, 300000);
+
     async function acquireWakeLock() {
       if (!('wakeLock' in navigator)) return;
       try {
