@@ -96,7 +96,7 @@
         .rule-tag { padding: 4px 10px; background: #1a1a1a; border-radius: 4px; font-size: 0.7rem; color: #888; font-weight: 500; }
         .qr-section { text-align: center; flex-shrink: 0; position: absolute; top: 10px; right: 16px; }
         .qr-box { background: #fff; padding: 10px; border-radius: 8px; }
-        .qr-code { width: 150px; height: 150px; display: block; }
+        .qr-code { width: 140px; height: 140px; display: block; }
         .neon-svg { display: block; margin: 6px auto 0; width: 150px; height: 48px; }
         @keyframes neonFlicker {
             0%,89%,91%,93%,95%,100% { opacity: 1; }
@@ -416,10 +416,10 @@
             <!-- Empty state (shown when session active but no players) -->
             <div class="state-screen" id="stateEmpty">
                 <div class="welcome-brand">Table Open</div>
-                <div style="font-size:1.8rem;font-weight:700;color:#fff;margin-bottom:4px;">First Up?</div>
-                <div style="font-size:0.85rem;color:#666;margin-bottom:20px;">Scan to put your name on the board</div>
+                <div class="welcome-headline">First Up?</div>
+                <div class="welcome-sub">Scan to put your name on the board</div>
                 <div class="welcome-qr-wrap">
-                    <img id="emptyQrImg" src="" style="width:160px;height:160px;display:block;" alt="QR">
+                    <img id="emptyQrImg" src="" style="width:200px;height:200px;display:block;" alt="QR">
                 </div>
                 <div class="welcome-cta">Scan with your phone's camera</div>
             </div>
