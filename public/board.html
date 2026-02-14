@@ -266,6 +266,25 @@
             0%, 100% { opacity: 0.6; }
             50% { opacity: 1; }
         }
+        .idle-undo-btn {
+            margin-top: 16px;
+            padding: 14px 28px;
+            background: rgba(245, 197, 24, 0.15);
+            border: 2px solid #f5c518;
+            border-radius: 10px;
+            color: #f5c518;
+            font-size: 1rem;
+            font-weight: 700;
+            font-family: inherit;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            z-index: 20;
+            animation: pulse-glow 2.5s ease-in-out infinite;
+        }
+        .idle-undo-btn:active {
+            background: rgba(245, 197, 24, 0.3);
+        }
         .welcome-footer {
             position: absolute; bottom: 16px;
             font-size: 0.6rem; color: #333; letter-spacing: 1px;
@@ -514,6 +533,7 @@
                     </g>
                 </svg>
                 <div class="welcome-cta">Scan with your phone's camera</div>
+                <button class="idle-undo-btn" id="idleUndoBtn" style="display:none;" onclick="doIdleRestore()">↩ Restore Board</button>
             </div>
         </div>
 
@@ -594,11 +614,14 @@
     let lastQueueChangeTime = Date.now();
     let lowPlayerSince = Date.now(); // when queue dropped to ≤1 player
     let forceWelcome = false;
+    let canIdleRestore = false;
+    let idleRestoreExpiry = 0;
     const IDLE_LOW_PLAYER_MS = 10 * 60 * 1000;  // 10 minutes with 0-1 players
     const IDLE_NO_MOVEMENT_MS = 60 * 60 * 1000;  // 1 hour with no changes
 
     function checkIdleRevert() {
         if (!session || session.status === 'closed') return; // already on welcome
+        if (forceWelcome) return; // already reverted
         const now = Date.now();
 
         // Check if queue changed
@@ -607,25 +630,78 @@
             lastQueueSnapshot = snap;
             lastQueueChangeTime = now;
             if (queue.length >= 2) lowPlayerSince = now;
-            if (forceWelcome) {
-                forceWelcome = false;
-                render();
-            }
             return;
         }
 
         // Condition 1: ≤1 player for 10 minutes
         if (queue.length <= 1 && (now - lowPlayerSince >= IDLE_LOW_PLAYER_MS)) {
-            if (!forceWelcome) { forceWelcome = true; render(); }
+            triggerIdleClear();
             return;
         }
 
         // Condition 2: no movement for 1 hour
         if (now - lastQueueChangeTime >= IDLE_NO_MOVEMENT_MS) {
-            if (!forceWelcome) { forceWelcome = true; render(); }
+            triggerIdleClear();
             return;
         }
     }
+
+    async function triggerIdleClear() {
+        if (forceWelcome) return;
+        forceWelcome = true;
+        // Wipe the board on the server (saves snapshot for undo)
+        try {
+            const res = await fetch('/api/idle-clear', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ tableCode: TABLE_CODE })
+            });
+            const data = await res.json();
+            if (data.cleared > 0) {
+                canIdleRestore = true;
+                idleRestoreExpiry = Date.now() + 30 * 60 * 1000; // 30 min window
+                showIdleUndo(true);
+            }
+        } catch (e) {
+            console.error('Idle clear failed:', e);
+        }
+        render();
+    }
+
+    async function doIdleRestore() {
+        try {
+            const res = await fetch('/api/idle-restore', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ tableCode: TABLE_CODE })
+            });
+            const data = await res.json();
+            if (data.success) {
+                forceWelcome = false;
+                canIdleRestore = false;
+                showIdleUndo(false);
+                // Reset idle timers
+                lastQueueChangeTime = Date.now();
+                lowPlayerSince = Date.now();
+                // Fresh state will come via WebSocket
+            }
+        } catch (e) {
+            console.error('Idle restore failed:', e);
+        }
+    }
+
+    function showIdleUndo(show) {
+        const btn = document.getElementById('idleUndoBtn');
+        if (btn) btn.style.display = show ? 'block' : 'none';
+    }
+
+    // Hide idle undo after 30 min
+    setInterval(() => {
+        if (canIdleRestore && Date.now() > idleRestoreExpiry) {
+            canIdleRestore = false;
+            showIdleUndo(false);
+        }
+    }, 30000);
 
     // Check every 30 seconds
     setInterval(checkIdleRevert, 30000);
@@ -655,9 +731,18 @@
             let data;
             try { data = JSON.parse(e.data); } catch { return; }
             if (data.type === 'queue_update') {
+                const oldLen = queue.length;
                 queue = data.queue;
                 session = data.session;
                 avgGameSeconds = data.avg_game_seconds;
+                // If board was idle-cleared but new people joined, wake up
+                if (forceWelcome && queue.length > 0) {
+                    forceWelcome = false;
+                    canIdleRestore = false;
+                    showIdleUndo(false);
+                    lastQueueChangeTime = Date.now();
+                    lowPlayerSince = Date.now();
+                }
                 checkIdleRevert(); // reset idle tracking before render
                 render();
             } else if (data.type === 'session_closed') {

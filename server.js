@@ -299,6 +299,38 @@ app.post('/api/undo', async (req, res) => {
   }
 });
 
+// Idle clear — board auto-wipes after inactivity (no PIN needed, board-only)
+app.post('/api/idle-clear', async (req, res) => {
+  try {
+    const { tableCode } = req.body;
+    const session = await db.getSession(tableCode);
+    if (!session) return res.status(404).json({ error: 'no_session' });
+    const result = await db.idleClearQueue(session.id);
+    if (result.error) return res.status(400).json(result);
+    await broadcastQueueUpdate(tableCode);
+    res.json(result);
+  } catch (err) {
+    console.error('POST /api/idle-clear error:', err);
+    res.status(500).json({ error: 'server_error' });
+  }
+});
+
+// Idle restore — undo the auto-wipe (no PIN needed, board-only)
+app.post('/api/idle-restore', async (req, res) => {
+  try {
+    const { tableCode } = req.body;
+    const session = await db.getSession(tableCode);
+    if (!session) return res.status(404).json({ error: 'no_session' });
+    const result = await db.idleRestoreQueue(session.id);
+    if (result.error) return res.status(400).json(result);
+    await broadcastQueueUpdate(tableCode);
+    res.json(result);
+  } catch (err) {
+    console.error('POST /api/idle-restore error:', err);
+    res.status(500).json({ error: 'server_error' });
+  }
+});
+
 // Start session
 app.post('/api/session/start', async (req, res) => {
   try {

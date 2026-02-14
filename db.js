@@ -1173,6 +1173,98 @@ async function getBarForTableCode(tableCode) {
 }
 
 // ============================================
+// Idle clear / restore (board auto-wipe)
+// ============================================
+const idleSnapshots = new Map(); // sessionId → [{ id, position, status, win_streak, ... }]
+
+async function idleClearQueue(sessionId) {
+  // Take a snapshot of all active entries before wiping
+  const activeQueue = await getQueue(sessionId);
+  if (activeQueue.length === 0) return { success: true, cleared: 0 };
+
+  // Save snapshot (full entry data needed for restore)
+  const snapshot = activeQueue.map(e => ({
+    id: e.id, position: e.position, status: e.status,
+    win_streak: e.win_streak,
+    confirmation_sent_at: e.confirmation_sent_at,
+    confirmed_at: e.confirmed_at,
+    mia_at: e.mia_at, ghosted_at: e.ghosted_at
+  }));
+  idleSnapshots.set(sessionId, { snapshot, savedAt: Date.now() });
+
+  // Mark all active entries as removed
+  if (useMemory) {
+    for (const snap of snapshot) {
+      const entry = mem.queue_entries.find(e => e.id === snap.id);
+      if (entry) {
+        entry.status = 'removed';
+        entry.removed_at = new Date();
+        entry.position = null;
+      }
+    }
+  } else {
+    const ids = snapshot.map(e => e.id);
+    await pool.query(
+      `UPDATE queue_entries SET status = 'removed', removed_at = NOW(), position = NULL
+       WHERE id = ANY($1)`,
+      [ids]
+    );
+  }
+  return { success: true, cleared: snapshot.length };
+}
+
+async function idleRestoreQueue(sessionId) {
+  const saved = idleSnapshots.get(sessionId);
+  if (!saved) return { error: 'nothing_to_restore' };
+
+  // Expire after 30 minutes
+  if (Date.now() - saved.savedAt > 30 * 60 * 1000) {
+    idleSnapshots.delete(sessionId);
+    return { error: 'snapshot_expired' };
+  }
+
+  const { snapshot } = saved;
+
+  if (useMemory) {
+    for (const snap of snapshot) {
+      const entry = mem.queue_entries.find(e => e.id === snap.id);
+      if (entry) {
+        entry.position = snap.position;
+        entry.status = snap.status;
+        entry.win_streak = snap.win_streak;
+        entry.confirmation_sent_at = snap.confirmation_sent_at;
+        entry.confirmed_at = snap.confirmed_at;
+        entry.mia_at = snap.mia_at;
+        entry.ghosted_at = snap.ghosted_at;
+        entry.removed_at = null;
+      }
+    }
+  } else {
+    for (const snap of snapshot) {
+      await pool.query(
+        `UPDATE queue_entries SET position = $1, status = $2, win_streak = $3,
+         confirmation_sent_at = $4, confirmed_at = $5, mia_at = $6, ghosted_at = $7,
+         removed_at = NULL WHERE id = $8`,
+        [snap.position, snap.status, snap.win_streak,
+         snap.confirmation_sent_at, snap.confirmed_at, snap.mia_at, snap.ghosted_at,
+         snap.id]
+      );
+    }
+  }
+
+  idleSnapshots.delete(sessionId);
+  return { success: true, restored: snapshot.length };
+}
+
+// Clean up expired idle snapshots every 10 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [sid, data] of idleSnapshots) {
+    if (now - data.savedAt > 30 * 60 * 1000) idleSnapshots.delete(sid);
+  }
+}, 600000);
+
+// ============================================
 // Exports
 // ============================================
 
@@ -1194,6 +1286,9 @@ module.exports = {
   updatePartnerName,
   ensureSession,
   clearStaleQueue,
+  // Idle clear/restore
+  idleClearQueue,
+  idleRestoreQueue,
   // Bar management
   getBars, getAllBars, getBar, getBarBySlug, createBar, updateBar,
   // Ad management
