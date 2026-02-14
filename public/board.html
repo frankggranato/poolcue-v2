@@ -88,83 +88,27 @@
         .qr-section { text-align: center; flex-shrink: 0; }
         .qr-box { background: #fff; padding: 10px; border-radius: 8px; }
         .qr-code { width: 130px; height: 130px; display: block; }
-        .neon-sign {
-            margin-top: 8px;
-            position: relative;
-            padding: 6px 0;
+        .neon-svg { display: block; margin: 6px auto 0; width: 150px; height: 50px; }
+        .neon-svg text { font-family: 'Inter', sans-serif; font-weight: 800; font-size: 22px; letter-spacing: 3px; }
+        .neon-svg .glow-wide { fill: none; stroke: #ff5500; stroke-width: 8; filter: url(#neonBlurWide); opacity: 0.35; }
+        .neon-svg .glow-mid { fill: none; stroke: #ff6a00; stroke-width: 5; filter: url(#neonBlurMid); opacity: 0.6; }
+        .neon-svg .glow-tight { fill: none; stroke: #ff8c33; stroke-width: 3; filter: url(#neonBlurTight); opacity: 0.8; }
+        .neon-svg .tube { fill: none; stroke: #ffbe80; stroke-width: 1.8; }
+        .neon-svg .core { fill: #ffe8d0; stroke: none; }
+        .neon-svg .arrow-glow-wide { fill: none; stroke: #ff5500; stroke-width: 6; filter: url(#neonBlurWide); opacity: 0.35; }
+        .neon-svg .arrow-glow-mid { fill: none; stroke: #ff6a00; stroke-width: 4; filter: url(#neonBlurMid); opacity: 0.6; }
+        .neon-svg .arrow-glow-tight { fill: none; stroke: #ff8c33; stroke-width: 2.5; filter: url(#neonBlurTight); opacity: 0.8; }
+        .neon-svg .arrow-tube { fill: none; stroke: #ffbe80; stroke-width: 1.5; }
+        .neon-svg .arrow-core { fill: none; stroke: #ffe8d0; stroke-width: 0.8; }
+        @keyframes neonFlicker {
+            0%,100% { opacity: 1; }
+            91% { opacity: 1; }
+            92% { opacity: 0.6; }
+            93% { opacity: 1; }
+            95% { opacity: 0.75; }
+            96.5% { opacity: 1; }
         }
-        .neon-text {
-            font-family: 'Inter', sans-serif;
-            font-size: 1.15rem;
-            font-weight: 700;
-            letter-spacing: 4px;
-            text-transform: uppercase;
-            color: #fff;
-            -webkit-text-stroke: 0.5px rgba(255,120,20,0.3);
-            text-shadow:
-                0 0 3px #fff,
-                0 0 7px #fff,
-                0 0 12px #ff8c1a,
-                0 0 22px #ff6600,
-                0 0 40px #ff6600,
-                0 0 55px #ff4500,
-                0 0 75px #ff4500,
-                0 0 100px rgba(255,69,0,0.4);
-            animation: neonPulse 3s ease-in-out infinite alternate;
-        }
-        .neon-arrow {
-            display: block;
-            margin: 4px auto 0;
-            width: 20px;
-            height: 24px;
-            position: relative;
-        }
-        .neon-arrow::before {
-            content: '';
-            position: absolute;
-            left: 50%;
-            bottom: 0;
-            transform: translateX(-50%);
-            width: 3px;
-            height: 16px;
-            background: #fff;
-            border-radius: 2px;
-            box-shadow:
-                0 0 3px #fff,
-                0 0 7px #fff,
-                0 0 12px #ff8c1a,
-                0 0 22px #ff6600,
-                0 0 40px #ff4500;
-            animation: neonPulse 3s ease-in-out infinite alternate;
-        }
-        .neon-arrow::after {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 50%;
-            transform: translateX(-50%) rotate(45deg);
-            width: 12px;
-            height: 12px;
-            border-top: 3px solid #fff;
-            border-right: 3px solid #fff;
-            border-radius: 2px;
-            box-shadow:
-                0 0 3px #fff,
-                0 0 7px #fff,
-                0 0 12px #ff8c1a,
-                0 0 22px #ff6600;
-            animation: neonPulse 3s ease-in-out infinite alternate;
-        }
-        @keyframes neonPulse {
-            0% { opacity: 1; filter: brightness(1); }
-            50% { opacity: 0.95; filter: brightness(1.05); }
-            85% { opacity: 1; filter: brightness(1); }
-            87% { opacity: 0.7; filter: brightness(0.8); }
-            89% { opacity: 1; filter: brightness(1.1); }
-            91% { opacity: 0.85; filter: brightness(0.9); }
-            93% { opacity: 1; filter: brightness(1); }
-            100% { opacity: 1; filter: brightness(1.02); }
-        }
+        .neon-group { animation: neonFlicker 5s ease-in-out infinite; }
 
         /* Main Content - Natural column flow: top-to-bottom, then next column */
         .main {
@@ -392,10 +336,32 @@
                     <div class="qr-box">
                         <img id="qrImg" src="" class="qr-code" alt="QR">
                     </div>
-                    <div class="neon-sign">
-                        <span class="neon-arrow"></span>
-                        <div class="neon-text">SCAN ME</div>
-                    </div>
+                    <svg class="neon-svg" viewBox="0 0 150 50" xmlns="http://www.w3.org/2000/svg">
+                        <defs>
+                            <filter id="neonBlurWide"><feGaussianBlur stdDeviation="6"/></filter>
+                            <filter id="neonBlurMid"><feGaussianBlur stdDeviation="3"/></filter>
+                            <filter id="neonBlurTight"><feGaussianBlur stdDeviation="1.2"/></filter>
+                        </defs>
+                        <g class="neon-group">
+                            <!-- Arrow pointing up -->
+                            <polyline points="68,4 75,0 82,4" class="arrow-glow-wide"/>
+                            <line x1="75" y1="1" x2="75" y2="12" class="arrow-glow-wide"/>
+                            <polyline points="68,4 75,0 82,4" class="arrow-glow-mid"/>
+                            <line x1="75" y1="1" x2="75" y2="12" class="arrow-glow-mid"/>
+                            <polyline points="68,4 75,0 82,4" class="arrow-glow-tight"/>
+                            <line x1="75" y1="1" x2="75" y2="12" class="arrow-glow-tight"/>
+                            <polyline points="68,4 75,0 82,4" class="arrow-tube" stroke-linejoin="miter"/>
+                            <line x1="75" y1="1" x2="75" y2="12" class="arrow-tube"/>
+                            <polyline points="68,4 75,0 82,4" class="arrow-core" stroke-linejoin="miter"/>
+                            <line x1="75" y1="1" x2="75" y2="12" class="arrow-core"/>
+                            <!-- Text layers: wide glow → mid glow → tight glow → tube → bright core -->
+                            <text x="75" y="38" text-anchor="middle" class="glow-wide">SCAN ME</text>
+                            <text x="75" y="38" text-anchor="middle" class="glow-mid">SCAN ME</text>
+                            <text x="75" y="38" text-anchor="middle" class="glow-tight">SCAN ME</text>
+                            <text x="75" y="38" text-anchor="middle" class="tube">SCAN ME</text>
+                            <text x="75" y="38" text-anchor="middle" class="core">SCAN ME</text>
+                        </g>
+                    </svg>
                 </div>
             </div>
 
