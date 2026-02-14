@@ -814,11 +814,15 @@
     function hideConfirm() {
         document.getElementById('confirmOverlay').classList.remove('show');
         pendingAction = null;
+        currentEl = null;
         // Reset king section inline styles from swipe animation
         const kingEl = document.getElementById('kingSection');
         kingEl.style.transform = '';
         kingEl.style.opacity = '';
         kingEl.classList.remove('swiping', 'swipe-left', 'swipe-right');
+        // Force DOM rebuild — data hasn't changed so render() would skip
+        // without this, the swiped challenger card stays invisible
+        document.getElementById('main').dataset.lastHtml = '';
         render();
     }
 
