@@ -88,27 +88,14 @@
         .qr-section { text-align: center; flex-shrink: 0; }
         .qr-box { background: #fff; padding: 10px; border-radius: 8px; }
         .qr-code { width: 130px; height: 130px; display: block; }
-        .neon-svg { display: block; margin: 6px auto 0; width: 150px; height: 50px; }
-        .neon-svg text { font-family: 'Inter', sans-serif; font-weight: 800; font-size: 22px; letter-spacing: 3px; }
-        .neon-svg .glow-wide { fill: none; stroke: #ff5500; stroke-width: 8; filter: url(#neonBlurWide); opacity: 0.35; }
-        .neon-svg .glow-mid { fill: none; stroke: #ff6a00; stroke-width: 5; filter: url(#neonBlurMid); opacity: 0.6; }
-        .neon-svg .glow-tight { fill: none; stroke: #ff8c33; stroke-width: 3; filter: url(#neonBlurTight); opacity: 0.8; }
-        .neon-svg .tube { fill: none; stroke: #ffbe80; stroke-width: 1.8; }
-        .neon-svg .core { fill: #ffe8d0; stroke: none; }
-        .neon-svg .arrow-glow-wide { fill: none; stroke: #ff5500; stroke-width: 6; filter: url(#neonBlurWide); opacity: 0.35; }
-        .neon-svg .arrow-glow-mid { fill: none; stroke: #ff6a00; stroke-width: 4; filter: url(#neonBlurMid); opacity: 0.6; }
-        .neon-svg .arrow-glow-tight { fill: none; stroke: #ff8c33; stroke-width: 2.5; filter: url(#neonBlurTight); opacity: 0.8; }
-        .neon-svg .arrow-tube { fill: none; stroke: #ffbe80; stroke-width: 1.5; }
-        .neon-svg .arrow-core { fill: none; stroke: #ffe8d0; stroke-width: 0.8; }
+        .neon-svg { display: block; margin: 6px auto 0; width: 170px; height: 55px; }
         @keyframes neonFlicker {
-            0%,100% { opacity: 1; }
-            91% { opacity: 1; }
-            92% { opacity: 0.6; }
-            93% { opacity: 1; }
-            95% { opacity: 0.75; }
-            96.5% { opacity: 1; }
+            0%,89%,91%,93%,95%,100% { opacity: 1; }
+            90% { opacity: 0.65; }
+            92% { opacity: 0.8; }
+            94% { opacity: 0.7; }
         }
-        .neon-group { animation: neonFlicker 5s ease-in-out infinite; }
+        .neon-group { animation: neonFlicker 6s ease-in-out infinite; }
 
         /* Main Content - Natural column flow: top-to-bottom, then next column */
         .main {
@@ -336,30 +323,39 @@
                     <div class="qr-box">
                         <img id="qrImg" src="" class="qr-code" alt="QR">
                     </div>
-                    <svg class="neon-svg" viewBox="0 0 150 50" xmlns="http://www.w3.org/2000/svg">
+                    <svg class="neon-svg" viewBox="0 0 170 55" xmlns="http://www.w3.org/2000/svg">
                         <defs>
-                            <filter id="neonBlurWide"><feGaussianBlur stdDeviation="6"/></filter>
-                            <filter id="neonBlurMid"><feGaussianBlur stdDeviation="3"/></filter>
-                            <filter id="neonBlurTight"><feGaussianBlur stdDeviation="1.2"/></filter>
+                            <filter id="gW"><feGaussianBlur stdDeviation="5"/></filter>
+                            <filter id="gM"><feGaussianBlur stdDeviation="2.5"/></filter>
+                            <filter id="gT"><feGaussianBlur stdDeviation="1"/></filter>
                         </defs>
                         <g class="neon-group">
-                            <!-- Arrow pointing up -->
-                            <polyline points="68,4 75,0 82,4" class="arrow-glow-wide"/>
-                            <line x1="75" y1="1" x2="75" y2="12" class="arrow-glow-wide"/>
-                            <polyline points="68,4 75,0 82,4" class="arrow-glow-mid"/>
-                            <line x1="75" y1="1" x2="75" y2="12" class="arrow-glow-mid"/>
-                            <polyline points="68,4 75,0 82,4" class="arrow-glow-tight"/>
-                            <line x1="75" y1="1" x2="75" y2="12" class="arrow-glow-tight"/>
-                            <polyline points="68,4 75,0 82,4" class="arrow-tube" stroke-linejoin="miter"/>
-                            <line x1="75" y1="1" x2="75" y2="12" class="arrow-tube"/>
-                            <polyline points="68,4 75,0 82,4" class="arrow-core" stroke-linejoin="miter"/>
-                            <line x1="75" y1="1" x2="75" y2="12" class="arrow-core"/>
-                            <!-- Text layers: wide glow → mid glow → tight glow → tube → bright core -->
-                            <text x="75" y="38" text-anchor="middle" class="glow-wide">SCAN ME</text>
-                            <text x="75" y="38" text-anchor="middle" class="glow-mid">SCAN ME</text>
-                            <text x="75" y="38" text-anchor="middle" class="glow-tight">SCAN ME</text>
-                            <text x="75" y="38" text-anchor="middle" class="tube">SCAN ME</text>
-                            <text x="75" y="38" text-anchor="middle" class="core">SCAN ME</text>
+                            <!-- Text: JOIN LIST — layer: wide glow, mid glow, tight glow, tube, core -->
+                            <text x="75" y="30" text-anchor="middle" font-family="Inter,sans-serif" font-weight="800" font-size="24" letter-spacing="2"
+                                fill="none" stroke="#ff4400" stroke-width="7" filter="url(#gW)" opacity="0.3">JOIN LIST</text>
+                            <text x="75" y="30" text-anchor="middle" font-family="Inter,sans-serif" font-weight="800" font-size="24" letter-spacing="2"
+                                fill="none" stroke="#ff5500" stroke-width="4" filter="url(#gM)" opacity="0.55">JOIN LIST</text>
+                            <text x="75" y="30" text-anchor="middle" font-family="Inter,sans-serif" font-weight="800" font-size="24" letter-spacing="2"
+                                fill="none" stroke="#ff7733" stroke-width="2.5" filter="url(#gT)" opacity="0.75">JOIN LIST</text>
+                            <text x="75" y="30" text-anchor="middle" font-family="Inter,sans-serif" font-weight="800" font-size="24" letter-spacing="2"
+                                fill="none" stroke="#ffaa66" stroke-width="1.5">JOIN LIST</text>
+                            <text x="75" y="30" text-anchor="middle" font-family="Inter,sans-serif" font-weight="800" font-size="24" letter-spacing="2"
+                                fill="#ffe0c0">JOIN LIST</text>
+
+                            <!-- Arrow line: underline going right, curves up, arrowhead pointing up -->
+                            <!-- The path: horizontal under text → curve up → vertical up -->
+                            <path d="M8,40 L138,40 Q152,40 152,26 L152,10" fill="none" stroke="#ff4400" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" filter="url(#gW)" opacity="0.3"/>
+                            <path d="M8,40 L138,40 Q152,40 152,26 L152,10" fill="none" stroke="#ff5500" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" filter="url(#gM)" opacity="0.55"/>
+                            <path d="M8,40 L138,40 Q152,40 152,26 L152,10" fill="none" stroke="#ff7733" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" filter="url(#gT)" opacity="0.75"/>
+                            <path d="M8,40 L138,40 Q152,40 152,26 L152,10" fill="none" stroke="#ffaa66" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M8,40 L138,40 Q152,40 152,26 L152,10" fill="none" stroke="#ffe0c0" stroke-width="0.6" stroke-linecap="round" stroke-linejoin="round"/>
+
+                            <!-- Arrowhead at top -->
+                            <polyline points="145,16 152,4 159,16" fill="none" stroke="#ff4400" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" filter="url(#gW)" opacity="0.3"/>
+                            <polyline points="145,16 152,4 159,16" fill="none" stroke="#ff5500" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" filter="url(#gM)" opacity="0.55"/>
+                            <polyline points="145,16 152,4 159,16" fill="none" stroke="#ff7733" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" filter="url(#gT)" opacity="0.75"/>
+                            <polyline points="145,16 152,4 159,16" fill="none" stroke="#ffaa66" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+                            <polyline points="145,16 152,4 159,16" fill="none" stroke="#ffe0c0" stroke-width="0.6" stroke-linecap="round" stroke-linejoin="round"/>
                         </g>
                     </svg>
                 </div>
