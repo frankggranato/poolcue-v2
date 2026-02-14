@@ -62,16 +62,19 @@
 
         /* Header — Now Playing zone */
         .header {
-            display: flex; flex-direction: column;
             padding: 12px 20px 8px;
             border-bottom: 1px solid rgba(255,255,255,0.06);
         }
         .header-top {
             display: flex; justify-content: space-between; align-items: flex-start;
         }
-        .shot-caller-section { flex: 1; }
-        .now-playing-label { font-size: 1rem; font-weight: 800; color: #e5a147; text-transform: uppercase; letter-spacing: 3px; margin-bottom: 2px; }
-        .shot-caller-name { font-size: 2rem; font-weight: 700; color: #fff; letter-spacing: -0.03em; line-height: 1.1; transition: opacity 0.2s; }
+        .now-playing-col {
+            flex: 1; min-width: 0;
+            display: flex; flex-direction: column;
+        }
+        .shot-caller-section { }
+        .now-playing-label { font-size: 0.75rem; font-weight: 700; color: #e5a147; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 1px; }
+        .shot-caller-name { font-size: 1.8rem; font-weight: 700; color: #fff; letter-spacing: -0.03em; line-height: 1.1; transition: opacity 0.2s; }
         .shot-caller-name.flash { animation: nameFlash 0.5s ease-out; }
         @keyframes nameFlash {
             0% { opacity: 0; transform: scale(0.95); }
@@ -125,22 +128,25 @@
             margin-bottom: 6px;
         }
 
-        /* Challenger Section — static element in header */
+        /* Challenger Section — inside now-playing-col */
         .challenger-section {
-            margin-top: 8px;
-            padding: 8px 0 0;
-            border-top: 1px solid rgba(255,255,255,0.08);
+            padding: 0;
         }
-        .challenger-label { font-size: 0.9rem; font-weight: 800; color: #ef4444; text-transform: uppercase; letter-spacing: 3px; margin-bottom: 2px; }
-        .challenger-name { font-size: 1.6rem; font-weight: 600; color: #fff; line-height: 1.2; transition: opacity 0.2s; }
+        .vs-divider {
+            font-size: 0.65rem; font-weight: 600; color: #444;
+            text-transform: uppercase; letter-spacing: 2px;
+            margin: 4px 0 2px;
+        }
+        .challenger-label { font-size: 0.75rem; font-weight: 700; color: #ef4444; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 1px; }
+        .challenger-name { font-size: 1.5rem; font-weight: 600; color: #fff; line-height: 1.2; transition: opacity 0.2s; }
         .challenger-name .partner { color: #aaa; }
         .challenger-status { margin-top: 2px; }
         .challenger-section .hint { font-size: 0.7rem; color: #444; margin-top: 2px; }
         .challenger-section.empty { display: none; }
         .hint { font-size: 0.7rem; color: #444; }
 
-        /* Rules row — sits below challenger */
-        .header-rules { margin-top: 8px; }
+        /* Rules row — inside now-playing-col */
+        .header-rules { margin-top: 6px; }
 
         /* Swipe states */
         .shot-caller-section.swiping { transition: none; }
@@ -300,6 +306,7 @@
             <!-- Header: Now Playing zone -->
             <div class="header">
                 <div class="header-top">
+                <div class="now-playing-col">
                 <div class="shot-caller-section swipeable" id="kingSection" data-role="king">
                     <div class="meta" id="avgTimeLabel"></div>
                     <div class="now-playing-label">Shot Caller</div>
@@ -310,6 +317,21 @@
                     </div>
                     <div class="hint" id="kingHint" style="display:none;">← swipe if lost →</div>
                 </div>
+                <!-- Challenger — static element in header, updated by render() -->
+                <div class="challenger-section swipeable" id="challengerSection" data-role="challenger" style="display:none;">
+                    <div class="vs-divider">vs</div>
+                    <div class="challenger-label">Challenger</div>
+                    <div class="challenger-name" id="challengerName"></div>
+                    <div class="challenger-status" id="challengerStatus"></div>
+                    <div class="hint" id="challengerHint" style="display:none;">← swipe if lost →</div>
+                </div>
+                <div class="header-rules">
+                    <div class="rules" id="rulesDisplay">
+                        <span class="rule-tag" id="tagGameType">Singles</span>
+                        <span class="rule-tag" id="tagRuleType">Bar Rules</span>
+                    </div>
+                </div>
+                </div> <!-- /now-playing-col -->
                 <div class="qr-section">
                     <div class="qr-box">
                         <img id="qrImg" src="" class="qr-code" alt="QR">
@@ -351,21 +373,6 @@
                     </svg>
                 </div>
             </div> <!-- /header-top -->
-
-            <!-- Challenger — static element, updated by render() -->
-            <div class="challenger-section swipeable" id="challengerSection" data-role="challenger" style="display:none;">
-                <div class="challenger-label">Challenger</div>
-                <div class="challenger-name" id="challengerName"></div>
-                <div class="challenger-status" id="challengerStatus"></div>
-                <div class="hint" id="challengerHint" style="display:none;">← swipe if lost →</div>
-            </div>
-
-            <div class="header-rules">
-                <div class="rules" id="rulesDisplay">
-                    <span class="rule-tag" id="tagGameType">Singles</span>
-                    <span class="rule-tag" id="tagRuleType">Bar Rules</span>
-                </div>
-            </div>
             </div> <!-- /header -->
 
             <!-- Main queue area -->
