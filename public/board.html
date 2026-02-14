@@ -850,6 +850,15 @@
             }
         }
         pendingAction = null;
+        // Force immediate re-render: fetch fresh state so board never shows
+        // stale/blank content while waiting for WebSocket update
+        try {
+            const fresh = await fetch(`/api/queue/${TABLE_CODE}`).then(r => r.json());
+            queue = fresh.queue || [];
+            session = fresh.session;
+            avgGameSeconds = fresh.avg_game_seconds;
+            render();
+        } catch(e) {}
     }
 
     function doUndo() {

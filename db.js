@@ -487,14 +487,20 @@ async function undoLastRemoval(sessionId) {
   if (!snapshot || snapshot.length === 0) return { error: 'nothing_to_undo' };
 
   const snapshotIds = new Set(snapshot.map(e => e.id));
-  const maxSnapshotPos = Math.max(...snapshot.map(e => e.position));
 
   // 4. Restore every entry in the snapshot to its exact previous state
+  //    EXCEPT: if someone voluntarily left (status='removed') after the game,
+  //    don't bring them back — their departure was a separate action.
+  const voluntarilyLeft = new Set();
   for (const snap of snapshot) {
     if (useMemory) {
-      // Find the entry (could be active or eliminated — search ALL entries)
       const entry = mem.queue_entries.find(e => e.id === snap.id && e.session_id === sessionId);
       if (entry) {
+        // If they voluntarily left (not eliminated by a game), skip restoration
+        if (entry.status === 'removed') {
+          voluntarilyLeft.add(snap.id);
+          continue;
+        }
         entry.position = snap.position;
         entry.status = snap.status;
         entry.win_streak = snap.win_streak;
@@ -502,9 +508,18 @@ async function undoLastRemoval(sessionId) {
         entry.confirmed_at = snap.confirmed_at;
         entry.mia_at = snap.mia_at;
         entry.ghosted_at = snap.ghosted_at;
-        entry.removed_at = null; // all snapshot entries were active
+        entry.removed_at = null;
       }
     } else {
+      // Check if voluntarily removed
+      const check = await pool.query(
+        'SELECT status FROM queue_entries WHERE id = $1 AND session_id = $2',
+        [snap.id, sessionId]
+      );
+      if (check.rows[0]?.status === 'removed') {
+        voluntarilyLeft.add(snap.id);
+        continue;
+      }
       await pool.query(
         `UPDATE queue_entries SET position = $1, status = $2, win_streak = $3,
          confirmation_sent_at = $4, confirmed_at = $5, mia_at = $6, ghosted_at = $7,
@@ -517,26 +532,36 @@ async function undoLastRemoval(sessionId) {
     }
   }
 
-  // 5. Handle players who joined AFTER the game result (not in snapshot).
-  //    Keep them but place after the restored queue.
-  let nextPos = maxSnapshotPos + 1;
+  // 5. Recompact positions to fill gaps from voluntarily-left players
+  //    Also handle players who joined AFTER the game result (not in snapshot).
   if (useMemory) {
-    const newJoins = mem.queue_entries.filter(e =>
-      e.session_id === sessionId && !snapshotIds.has(e.id)
-      && !['eliminated', 'removed'].includes(e.status)
+    const active = mem.queue_entries.filter(e =>
+      e.session_id === sessionId && !['eliminated', 'removed'].includes(e.status)
     ).sort((a, b) => a.position - b.position);
-    for (const entry of newJoins) {
-      entry.position = nextPos++;
+    // Separate: snapshot entries first (in snapshot order), then new joins
+    const snapshotActive = active.filter(e => snapshotIds.has(e.id) && !voluntarilyLeft.has(e.id));
+    const newJoins = active.filter(e => !snapshotIds.has(e.id));
+    let pos = 1;
+    for (const entry of [...snapshotActive, ...newJoins]) {
+      entry.position = pos++;
     }
   } else {
+    // Snapshot entries first, then new joins
+    const snapRes = await pool.query(
+      `SELECT id FROM queue_entries WHERE session_id = $1
+       AND id = ANY($2) AND status NOT IN ('eliminated', 'removed')
+       ORDER BY position ASC`,
+      [sessionId, Array.from(snapshotIds)]
+    );
     const newRes = await pool.query(
       `SELECT id FROM queue_entries WHERE session_id = $1
        AND id != ALL($2) AND status NOT IN ('eliminated', 'removed')
        ORDER BY position ASC`,
       [sessionId, Array.from(snapshotIds)]
     );
-    for (const row of newRes.rows) {
-      await pool.query('UPDATE queue_entries SET position = $1 WHERE id = $2', [nextPos++, row.id]);
+    let pos = 1;
+    for (const row of [...snapRes.rows, ...newRes.rows]) {
+      await pool.query('UPDATE queue_entries SET position = $1 WHERE id = $2', [pos++, row.id]);
     }
   }
 
