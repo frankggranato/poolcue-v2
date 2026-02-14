@@ -315,7 +315,7 @@
             position: absolute; left: 0; right: 0; bottom: 0;
             display: none; align-items: center; justify-content: center;
             background: #0c0c0c; z-index: 10;
-            height: 160px;
+            height: 240px;
             border-top: 1px solid rgba(255,255,255,0.06);
         }
         .idle-ad-overlay.active { display: flex; }
@@ -331,7 +331,7 @@
             position: absolute; left: 0; right: 0; top: 0;
             display: none; align-items: center; justify-content: center;
             background: #0c0c0c; z-index: 10;
-            height: 120px;
+            height: 180px;
             border-bottom: 1px solid rgba(255,255,255,0.06);
         }
         .idle-ad-top.active { display: flex; }
@@ -344,10 +344,10 @@
 
         /* Idle ad — sides */
         .idle-ad-side {
-            position: absolute; top: 120px; bottom: 160px;
+            position: absolute; top: 180px; bottom: 240px;
             display: none; align-items: center; justify-content: center;
             background: #0c0c0c; z-index: 10;
-            width: 80px; overflow: hidden;
+            width: 120px; overflow: hidden;
         }
         .idle-ad-side.active { display: flex; }
         .idle-ad-side.left {
@@ -360,7 +360,7 @@
         }
         .idle-ad-side img {
             /* Rotate horizontal banner to display vertically along the side */
-            width: auto; height: 80px;
+            width: auto; height: 120px;
             max-width: none;
             transform: rotate(-90deg);
             transform-origin: center center;
@@ -370,10 +370,10 @@
         .idle-ad-side img.fade-out { opacity: 0; }
         /* Adjust welcome padding when ads are framing it */
         .welcome-screen.has-ad {
-            padding-top: 140px !important;
-            padding-bottom: 180px !important;
-            padding-left: 90px !important;
-            padding-right: 90px !important;
+            padding-top: 200px !important;
+            padding-bottom: 260px !important;
+            padding-left: 130px !important;
+            padding-right: 130px !important;
         }
 
         /* Debug panel */
@@ -589,6 +589,47 @@
     let pendingAction = null;
     let lastKingName = '';
 
+    // Idle detection — revert to welcome screen
+    let lastQueueSnapshot = '';      // JSON string of queue for change detection
+    let lastQueueChangeTime = Date.now();
+    let lowPlayerSince = Date.now(); // when queue dropped to ≤1 player
+    let forceWelcome = false;
+    const IDLE_LOW_PLAYER_MS = 10 * 60 * 1000;  // 10 minutes with 0-1 players
+    const IDLE_NO_MOVEMENT_MS = 60 * 60 * 1000;  // 1 hour with no changes
+
+    function checkIdleRevert() {
+        if (!session || session.status === 'closed') return; // already on welcome
+        const now = Date.now();
+
+        // Check if queue changed
+        const snap = JSON.stringify(queue.map(e => e.id + ':' + e.position));
+        if (snap !== lastQueueSnapshot) {
+            lastQueueSnapshot = snap;
+            lastQueueChangeTime = now;
+            if (queue.length >= 2) lowPlayerSince = now;
+            if (forceWelcome) {
+                forceWelcome = false;
+                render();
+            }
+            return;
+        }
+
+        // Condition 1: ≤1 player for 10 minutes
+        if (queue.length <= 1 && (now - lowPlayerSince >= IDLE_LOW_PLAYER_MS)) {
+            if (!forceWelcome) { forceWelcome = true; render(); }
+            return;
+        }
+
+        // Condition 2: no movement for 1 hour
+        if (now - lastQueueChangeTime >= IDLE_NO_MOVEMENT_MS) {
+            if (!forceWelcome) { forceWelcome = true; render(); }
+            return;
+        }
+    }
+
+    // Check every 30 seconds
+    setInterval(checkIdleRevert, 30000);
+
     // Undo is always available — server validates the 60-second window
 
     // XSS protection
@@ -617,6 +658,7 @@
                 queue = data.queue;
                 session = data.session;
                 avgGameSeconds = data.avg_game_seconds;
+                checkIdleRevert(); // reset idle tracking before render
                 render();
             } else if (data.type === 'session_closed') {
                 session = { status: 'closed' };
@@ -630,6 +672,7 @@
                 queue = data.queue || [];
                 session = data.session;
                 avgGameSeconds = data.avg_game_seconds;
+                checkIdleRevert();
                 render();
             }).catch(() => {});
         };
@@ -644,6 +687,10 @@
             queue = data.queue || [];
             session = data.session;
             avgGameSeconds = data.avg_game_seconds;
+            // Initialize idle tracking
+            lastQueueSnapshot = JSON.stringify(queue.map(e => e.id + ':' + e.position));
+            lastQueueChangeTime = Date.now();
+            lowPlayerSince = queue.length >= 2 ? Date.now() : Date.now();
             render();
         } catch (err) {
             console.error('Init fetch failed:', err);
@@ -661,8 +708,8 @@
         const headerEl = document.querySelector('.header');
         const footerEl = document.querySelector('.footer');
 
-        // No session or closed — show welcome splash with QR
-        if (!session || session.status === 'closed') {
+        // No session, closed, or idle timeout — show welcome splash with QR
+        if (!session || session.status === 'closed' || forceWelcome) {
             headerEl.style.display = 'none';
             mainEl.style.display = 'none';
             footerEl.style.display = 'none';
