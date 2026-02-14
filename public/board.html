@@ -62,7 +62,8 @@
 
         /* Header — Now Playing zone */
         .header {
-            padding: 12px 20px 8px;
+            position: relative;
+            padding: 14px 20px 10px;
             border-bottom: 1px solid rgba(255,255,255,0.06);
         }
         .header-top {
@@ -72,8 +73,8 @@
             flex: 1; min-width: 0;
             display: flex; flex-direction: column;
         }
-        .shot-caller-section { }
-        .now-playing-label { font-size: 0.75rem; font-weight: 700; color: #e5a147; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 1px; }
+        .shot-caller-section { margin-bottom: 2px; }
+        .now-playing-label { font-size: 0.75rem; font-weight: 700; color: #e5a147; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 2px; }
         .shot-caller-name { font-size: 1.8rem; font-weight: 700; color: #fff; letter-spacing: -0.03em; line-height: 1.1; transition: opacity 0.2s; }
         .shot-caller-name.flash { animation: nameFlash 0.5s ease-out; }
         @keyframes nameFlash {
@@ -92,7 +93,7 @@
         .win-streak.legendary .win-label { color: #f5c518; }
         .rules { display: flex; gap: 6px; margin-top: 8px; }
         .rule-tag { padding: 4px 10px; background: #1a1a1a; border-radius: 4px; font-size: 0.7rem; color: #888; font-weight: 500; }
-        .qr-section { text-align: center; flex-shrink: 0; }
+        .qr-section { text-align: center; flex-shrink: 0; position: absolute; top: 10px; right: 16px; }
         .qr-box { background: #fff; padding: 10px; border-radius: 8px; }
         .qr-code { width: 130px; height: 130px; display: block; }
         .neon-svg { display: block; margin: 6px auto 0; width: 150px; height: 48px; }
@@ -135,9 +136,9 @@
         .vs-divider {
             font-size: 0.65rem; font-weight: 600; color: #444;
             text-transform: uppercase; letter-spacing: 2px;
-            margin: 4px 0 2px;
+            margin: 6px 0 4px;
         }
-        .challenger-label { font-size: 0.75rem; font-weight: 700; color: #ef4444; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 1px; }
+        .challenger-label { font-size: 0.75rem; font-weight: 700; color: #ef4444; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 2px; }
         .challenger-name { font-size: 1.5rem; font-weight: 600; color: #fff; line-height: 1.2; transition: opacity 0.2s; }
         .challenger-name .partner { color: #aaa; }
         .challenger-status { margin-top: 2px; }
@@ -146,7 +147,7 @@
         .hint { font-size: 0.7rem; color: #444; }
 
         /* Rules row — inside now-playing-col */
-        .header-rules { margin-top: 6px; }
+        .header-rules { margin-top: 8px; }
 
         /* Swipe states */
         .shot-caller-section.swiping { transition: none; }
