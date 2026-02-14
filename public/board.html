@@ -432,18 +432,35 @@
                 <div class="welcome-qr-wrap">
                     <img id="welcomeQrImg" src="" class="qr-code" alt="QR" style="width:200px;height:200px;">
                 </div>
-                <svg class="neon-svg" viewBox="0 0 150 48" style="width:180px;height:58px;margin-bottom:8px;">
+                <svg class="neon-svg" viewBox="0 0 170 55" style="width:200px;height:65px;margin-bottom:8px;">
                     <defs>
-                        <filter id="welcomeNeon" x="-20%" y="-20%" width="140%" height="140%">
-                            <feGaussianBlur stdDeviation="2" result="blur1"/>
-                            <feGaussianBlur stdDeviation="4" result="blur2"/>
-                            <feMerge><feMergeNode in="blur2"/><feMergeNode in="blur1"/><feMergeNode in="SourceGraphic"/></feMerge>
-                        </filter>
+                        <filter id="wgW"><feGaussianBlur stdDeviation="5"/></filter>
+                        <filter id="wgM"><feGaussianBlur stdDeviation="2.5"/></filter>
+                        <filter id="wgT"><feGaussianBlur stdDeviation="1"/></filter>
                     </defs>
-                    <g filter="url(#welcomeNeon)" class="neon-group">
-                        <text x="75" y="22" text-anchor="middle" font-family="'Pacifico','Brush Script MT',cursive" font-size="20" fill="#ff1744" font-weight="400">JOIN LIST</text>
-                        <line x1="20" y1="32" x2="115" y2="32" stroke="#ff1744" stroke-width="1.5" stroke-linecap="round"/>
-                        <polyline points="110,28 118,32 110,36" fill="none" stroke="#ff1744" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    <g class="neon-group">
+                        <text x="75" y="30" text-anchor="middle" font-family="Inter,sans-serif" font-weight="800" font-size="24" letter-spacing="2"
+                            fill="none" stroke="#ff4400" stroke-width="7" filter="url(#wgW)" opacity="0.3">JOIN LIST</text>
+                        <text x="75" y="30" text-anchor="middle" font-family="Inter,sans-serif" font-weight="800" font-size="24" letter-spacing="2"
+                            fill="none" stroke="#ff5500" stroke-width="4" filter="url(#wgM)" opacity="0.55">JOIN LIST</text>
+                        <text x="75" y="30" text-anchor="middle" font-family="Inter,sans-serif" font-weight="800" font-size="24" letter-spacing="2"
+                            fill="none" stroke="#ff7733" stroke-width="2.5" filter="url(#wgT)" opacity="0.75">JOIN LIST</text>
+                        <text x="75" y="30" text-anchor="middle" font-family="Inter,sans-serif" font-weight="800" font-size="24" letter-spacing="2"
+                            fill="none" stroke="#ffaa66" stroke-width="1.5">JOIN LIST</text>
+                        <text x="75" y="30" text-anchor="middle" font-family="Inter,sans-serif" font-weight="800" font-size="24" letter-spacing="2"
+                            fill="#ffe0c0">JOIN LIST</text>
+
+                        <path d="M8,40 L138,40 Q152,40 152,26 L152,10" fill="none" stroke="#ff4400" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" filter="url(#wgW)" opacity="0.3"/>
+                        <path d="M8,40 L138,40 Q152,40 152,26 L152,10" fill="none" stroke="#ff5500" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" filter="url(#wgM)" opacity="0.55"/>
+                        <path d="M8,40 L138,40 Q152,40 152,26 L152,10" fill="none" stroke="#ff7733" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" filter="url(#wgT)" opacity="0.75"/>
+                        <path d="M8,40 L138,40 Q152,40 152,26 L152,10" fill="none" stroke="#ffaa66" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M8,40 L138,40 Q152,40 152,26 L152,10" fill="none" stroke="#ffe0c0" stroke-width="0.6" stroke-linecap="round" stroke-linejoin="round"/>
+
+                        <polyline points="145,16 152,4 159,16" fill="none" stroke="#ff4400" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" filter="url(#wgW)" opacity="0.3"/>
+                        <polyline points="145,16 152,4 159,16" fill="none" stroke="#ff5500" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" filter="url(#wgM)" opacity="0.55"/>
+                        <polyline points="145,16 152,4 159,16" fill="none" stroke="#ff7733" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" filter="url(#wgT)" opacity="0.75"/>
+                        <polyline points="145,16 152,4 159,16" fill="none" stroke="#ffaa66" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <polyline points="145,16 152,4 159,16" fill="none" stroke="#ffe0c0" stroke-width="0.6" stroke-linecap="round" stroke-linejoin="round"/>
                     </g>
                 </svg>
                 <div class="welcome-cta">Scan with your phone's camera</div>
