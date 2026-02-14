@@ -15,7 +15,11 @@ const mem = {
   sessions: [],
   queue_entries: [],
   game_log: [],
-  _idCounters: { sessions: 0, queue_entries: 0, game_log: 0 }
+  bars: [],
+  ads: [],
+  ad_bar_targets: [],
+  ad_impressions: [],
+  _idCounters: { sessions: 0, queue_entries: 0, game_log: 0, bars: 0, ads: 0, ad_bar_targets: 0, ad_impressions: 0 }
 };
 
 function nextId(table) {
@@ -87,6 +91,42 @@ async function createTables() {
       duration_seconds INTEGER,
       counted_for_avg BOOLEAN DEFAULT true,
       ended_at TIMESTAMP DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS bars (
+      id SERIAL PRIMARY KEY,
+      name VARCHAR(100) NOT NULL,
+      slug VARCHAR(50) NOT NULL UNIQUE,
+      address VARCHAR(200),
+      contact_name VARCHAR(100),
+      contact_phone VARCHAR(30),
+      active BOOLEAN DEFAULT true,
+      created_at TIMESTAMP DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS ads (
+      id SERIAL PRIMARY KEY,
+      advertiser_name VARCHAR(100) NOT NULL,
+      image_data TEXT NOT NULL,
+      image_type VARCHAR(50) NOT NULL DEFAULT 'image/png',
+      start_date DATE,
+      end_date DATE,
+      active BOOLEAN DEFAULT true,
+      created_at TIMESTAMP DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS ad_bar_targets (
+      id SERIAL PRIMARY KEY,
+      ad_id INTEGER REFERENCES ads(id) ON DELETE CASCADE,
+      bar_id INTEGER REFERENCES bars(id) ON DELETE CASCADE,
+      UNIQUE(ad_id, bar_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS ad_impressions (
+      id SERIAL PRIMARY KEY,
+      ad_id INTEGER REFERENCES ads(id) ON DELETE CASCADE,
+      bar_id INTEGER REFERENCES bars(id) ON DELETE CASCADE,
+      shown_at TIMESTAMP DEFAULT NOW()
     );
   `);
   // Migration: add mia_at column if missing (added after initial deploy)
@@ -874,6 +914,265 @@ async function clearStaleQueue(sessionId) {
 }
 
 // ============================================
+// Bar management
+// ============================================
+
+async function getBars() {
+  if (useMemory) return mem.bars.filter(b => b.active);
+  const res = await pool.query('SELECT * FROM bars WHERE active = true ORDER BY name');
+  return res.rows;
+}
+
+async function getAllBars() {
+  if (useMemory) return [...mem.bars];
+  const res = await pool.query('SELECT * FROM bars ORDER BY name');
+  return res.rows;
+}
+
+async function getBar(barId) {
+  if (useMemory) return mem.bars.find(b => b.id === barId) || null;
+  const res = await pool.query('SELECT * FROM bars WHERE id = $1', [barId]);
+  return res.rows[0] || null;
+}
+
+async function getBarBySlug(slug) {
+  if (useMemory) return mem.bars.find(b => b.slug === slug) || null;
+  const res = await pool.query('SELECT * FROM bars WHERE slug = $1', [slug]);
+  return res.rows[0] || null;
+}
+
+async function createBar(name, slug, address, contactName, contactPhone) {
+  if (useMemory) {
+    const bar = {
+      id: nextId('bars'), name, slug, address: address || null,
+      contact_name: contactName || null, contact_phone: contactPhone || null,
+      active: true, created_at: new Date()
+    };
+    mem.bars.push(bar);
+    return bar;
+  }
+  const res = await pool.query(
+    `INSERT INTO bars (name, slug, address, contact_name, contact_phone)
+     VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+    [name, slug, address || null, contactName || null, contactPhone || null]
+  );
+  return res.rows[0];
+}
+
+async function updateBar(barId, fields) {
+  const bar = await getBar(barId);
+  if (!bar) return null;
+  if (useMemory) {
+    Object.assign(bar, fields);
+    return bar;
+  }
+  const sets = [];
+  const vals = [];
+  let i = 1;
+  for (const [key, val] of Object.entries(fields)) {
+    sets.push(`${key} = $${i}`);
+    vals.push(val);
+    i++;
+  }
+  vals.push(barId);
+  const res = await pool.query(
+    `UPDATE bars SET ${sets.join(', ')} WHERE id = $${i} RETURNING *`, vals
+  );
+  return res.rows[0];
+}
+
+// ============================================
+// Ad management
+// ============================================
+
+async function getAds() {
+  if (useMemory) return [...mem.ads];
+  const res = await pool.query('SELECT * FROM ads ORDER BY created_at DESC');
+  return res.rows;
+}
+
+async function getAd(adId) {
+  if (useMemory) return mem.ads.find(a => a.id === adId) || null;
+  const res = await pool.query('SELECT * FROM ads WHERE id = $1', [adId]);
+  return res.rows[0] || null;
+}
+
+async function createAd(advertiserName, imageData, imageType, startDate, endDate) {
+  if (useMemory) {
+    const ad = {
+      id: nextId('ads'), advertiser_name: advertiserName,
+      image_data: imageData, image_type: imageType || 'image/png',
+      start_date: startDate || null, end_date: endDate || null,
+      active: true, created_at: new Date()
+    };
+    mem.ads.push(ad);
+    return ad;
+  }
+  const res = await pool.query(
+    `INSERT INTO ads (advertiser_name, image_data, image_type, start_date, end_date)
+     VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+    [advertiserName, imageData, imageType || 'image/png', startDate || null, endDate || null]
+  );
+  return res.rows[0];
+}
+
+async function updateAd(adId, fields) {
+  const ad = await getAd(adId);
+  if (!ad) return null;
+  if (useMemory) {
+    Object.assign(ad, fields);
+    return ad;
+  }
+  const sets = [];
+  const vals = [];
+  let i = 1;
+  for (const [key, val] of Object.entries(fields)) {
+    sets.push(`${key} = $${i}`);
+    vals.push(val);
+    i++;
+  }
+  vals.push(adId);
+  const res = await pool.query(
+    `UPDATE ads SET ${sets.join(', ')} WHERE id = $${i} RETURNING *`, vals
+  );
+  return res.rows[0];
+}
+
+async function deleteAd(adId) {
+  if (useMemory) {
+    mem.ads = mem.ads.filter(a => a.id !== adId);
+    mem.ad_bar_targets = mem.ad_bar_targets.filter(t => t.ad_id !== adId);
+    mem.ad_impressions = mem.ad_impressions.filter(i => i.ad_id !== adId);
+    return true;
+  }
+  await pool.query('DELETE FROM ads WHERE id = $1', [adId]);
+  return true;
+}
+
+// ============================================
+// Ad targeting (which ads show at which bars)
+// ============================================
+
+async function setAdTargets(adId, barIds) {
+  if (useMemory) {
+    mem.ad_bar_targets = mem.ad_bar_targets.filter(t => t.ad_id !== adId);
+    for (const barId of barIds) {
+      mem.ad_bar_targets.push({ id: nextId('ad_bar_targets'), ad_id: adId, bar_id: barId });
+    }
+    return true;
+  }
+  await pool.query('DELETE FROM ad_bar_targets WHERE ad_id = $1', [adId]);
+  for (const barId of barIds) {
+    await pool.query('INSERT INTO ad_bar_targets (ad_id, bar_id) VALUES ($1, $2)', [adId, barId]);
+  }
+  return true;
+}
+
+async function getAdTargets(adId) {
+  if (useMemory) return mem.ad_bar_targets.filter(t => t.ad_id === adId).map(t => t.bar_id);
+  const res = await pool.query('SELECT bar_id FROM ad_bar_targets WHERE ad_id = $1', [adId]);
+  return res.rows.map(r => r.bar_id);
+}
+
+async function getAdsForBar(barId) {
+  const now = new Date();
+  const today = now.toISOString().slice(0, 10);
+  if (useMemory) {
+    const targetAdIds = mem.ad_bar_targets.filter(t => t.bar_id === barId).map(t => t.ad_id);
+    return mem.ads.filter(a =>
+      a.active && targetAdIds.includes(a.id)
+      && (!a.start_date || a.start_date <= today)
+      && (!a.end_date || a.end_date >= today)
+    );
+  }
+  const res = await pool.query(
+    `SELECT a.* FROM ads a
+     JOIN ad_bar_targets t ON t.ad_id = a.id
+     WHERE t.bar_id = $1 AND a.active = true
+       AND (a.start_date IS NULL OR a.start_date <= $2)
+       AND (a.end_date IS NULL OR a.end_date >= $2)
+     ORDER BY a.created_at DESC`,
+    [barId, today]
+  );
+  return res.rows;
+}
+
+// ============================================
+// Ad impressions
+// ============================================
+
+async function logImpression(adId, barId) {
+  if (useMemory) {
+    mem.ad_impressions.push({
+      id: nextId('ad_impressions'), ad_id: adId, bar_id: barId, shown_at: new Date()
+    });
+    return true;
+  }
+  await pool.query(
+    'INSERT INTO ad_impressions (ad_id, bar_id) VALUES ($1, $2)',
+    [adId, barId]
+  );
+  return true;
+}
+
+async function getImpressionReport() {
+  if (useMemory) {
+    const report = {};
+    for (const imp of mem.ad_impressions) {
+      const key = `${imp.ad_id}-${imp.bar_id}`;
+      if (!report[key]) {
+        const ad = mem.ads.find(a => a.id === imp.ad_id);
+        const bar = mem.bars.find(b => b.id === imp.bar_id);
+        report[key] = {
+          ad_id: imp.ad_id, advertiser_name: ad?.advertiser_name || 'Unknown',
+          bar_id: imp.bar_id, bar_name: bar?.name || 'Unknown',
+          total: 0, today: 0, this_week: 0, this_month: 0
+        };
+      }
+      report[key].total++;
+      const age = Date.now() - new Date(imp.shown_at).getTime();
+      if (age < 86400000) report[key].today++;
+      if (age < 604800000) report[key].this_week++;
+      if (age < 2592000000) report[key].this_month++;
+    }
+    return Object.values(report);
+  }
+  const res = await pool.query(`
+    SELECT a.id as ad_id, a.advertiser_name, b.id as bar_id, b.name as bar_name,
+      COUNT(*) as total,
+      COUNT(*) FILTER (WHERE i.shown_at > NOW() - INTERVAL '1 day') as today,
+      COUNT(*) FILTER (WHERE i.shown_at > NOW() - INTERVAL '7 days') as this_week,
+      COUNT(*) FILTER (WHERE i.shown_at > NOW() - INTERVAL '30 days') as this_month
+    FROM ad_impressions i
+    JOIN ads a ON a.id = i.ad_id
+    JOIN bars b ON b.id = i.bar_id
+    GROUP BY a.id, a.advertiser_name, b.id, b.name
+    ORDER BY this_week DESC
+  `);
+  return res.rows;
+}
+
+// ============================================
+// Link bars to sessions
+// ============================================
+
+async function getBarForTableCode(tableCode) {
+  // Look up bar by matching session's table_code to a bar slug
+  // Convention: tableCode starts with bar slug (e.g. "flanagans" or "flanagans-2")
+  if (useMemory) {
+    for (const bar of mem.bars) {
+      if (tableCode === bar.slug || tableCode.startsWith(bar.slug + '-')) return bar;
+    }
+    return null;
+  }
+  const res = await pool.query(
+    `SELECT * FROM bars WHERE $1 = slug OR $1 LIKE slug || '-%' LIMIT 1`,
+    [tableCode]
+  );
+  return res.rows[0] || null;
+}
+
+// ============================================
 // Exports
 // ============================================
 
@@ -895,11 +1194,25 @@ module.exports = {
   updatePartnerName,
   ensureSession,
   clearStaleQueue,
+  // Bar management
+  getBars, getAllBars, getBar, getBarBySlug, createBar, updateBar,
+  // Ad management
+  getAds, getAd, createAd, updateAd, deleteAd,
+  // Ad targeting
+  setAdTargets, getAdTargets, getAdsForBar,
+  // Ad impressions
+  logImpression, getImpressionReport,
+  // Bar-session link
+  getBarForTableCode,
   _resetMemory() {
     mem.sessions = [];
     mem.queue_entries = [];
     mem.game_log = [];
-    mem._idCounters = { sessions: 0, queue_entries: 0, game_log: 0 };
+    mem.bars = [];
+    mem.ads = [];
+    mem.ad_bar_targets = [];
+    mem.ad_impressions = [];
+    mem._idCounters = { sessions: 0, queue_entries: 0, game_log: 0, bars: 0, ads: 0, ad_bar_targets: 0, ad_impressions: 0 };
   },
   _getMemory() { return mem; }
 };

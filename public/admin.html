@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pool Cue — Admin</title>
+<link rel="icon" href="/favicon.svg">
+<link rel="stylesheet" href="/style.css">
+<style>
+  body { background: #0a0a0a; }
+  .admin-wrap { max-width: 900px; margin: 0 auto; padding: 16px; }
+  .login-wrap { max-width: 360px; margin: 80px auto; padding: 20px; }
+
+  /* Tabs */
+  .tabs { display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 0; }
+  .tab { padding: 10px 20px; background: none; border: none; color: var(--dim); font-weight: 600;
+         font-size: 0.9rem; cursor: pointer; border-bottom: 2px solid transparent; font-family: inherit; }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  /* Table */
+  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  th { text-align: left; padding: 8px 12px; color: var(--muted); font-size: 0.7rem; text-transform: uppercase;
+       letter-spacing: 0.5px; border-bottom: 1px solid var(--border); }
+  td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  tr:hover { background: rgba(255,255,255,0.02); }
+
+  /* Forms */
+  .form-row { display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+  .form-row .input { margin-bottom: 0; flex: 1; min-width: 140px; padding: 12px; font-size: 0.9rem; }
+  .form-row .btn { width: auto; padding: 12px 24px; flex-shrink: 0; }
+
+  /* Badge */
+  .badge { display: inline-block; padding: 3px 8px; border-radius: 6px; font-size: 0.7rem; font-weight: 700; }
+  .badge-green { background: rgba(34,197,94,0.15); color: var(--green); }
+  .badge-red { background: rgba(239,68,68,0.15); color: var(--danger); }
+  .badge-dim { background: rgba(255,255,255,0.06); color: var(--muted); }
+
+  /* Ad preview */
+  .ad-preview { max-height: 60px; border-radius: 4px; }
+  .ad-upload-area { border: 2px dashed var(--border); border-radius: 10px; padding: 20px; text-align: center;
+                    color: var(--muted); cursor: pointer; transition: border-color 0.2s; margin-bottom: 12px; }
+  .ad-upload-area:hover { border-color: var(--accent); }
+  .ad-upload-area img { max-height: 80px; margin-top: 8px; }
+
+  /* Checkbox list */
+  .bar-checks { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  .bar-check { display: flex; align-items: center; gap: 6px; padding: 6px 12px; background: var(--bg2);
+               border: 1px solid var(--border); border-radius: 8px; font-size: 0.85rem; cursor: pointer; }
+  .bar-check input { accent-color: var(--accent); }
+  .bar-check.checked { border-color: rgba(245,197,24,0.4); background: rgba(245,197,24,0.06); }
+
+  /* Report */
+  .report-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px;
+                 padding: 14px 16px; margin-bottom: 10px; }
+  .report-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .report-nums { display: flex; gap: 20px; }
+  .report-num { text-align: center; }
+  .report-num .val { font-size: 1.3rem; font-weight: 800; color: var(--accent); }
+  .report-num .lbl { font-size: 0.65rem; color: var(--muted); text-transform: uppercase; }
+
+  .section-title { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px;
+                   margin-bottom: 12px; font-weight: 600; }
+  .action-btn { background: none; border: 1px solid var(--border); color: var(--dim); padding: 4px 10px;
+                border-radius: 6px; font-size: 0.75rem; cursor: pointer; font-family: inherit; }
+  .action-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .action-btn.danger:hover { border-color: var(--danger); color: var(--danger); }
+
+  .panel { display: none; }
+  .panel.active { display: block; }
+</style>
+</head>
+<body>
+
+<!-- Login gate -->
+<div id="loginView" class="login-wrap">
+  <div style="text-align:center;margin-bottom:24px;">
+    <div class="logo" style="justify-content:center;">
+      <div class="logo-mark">🎱</div>
+      Pool Cue Admin
+    </div>
+  </div>
+  <input type="password" id="pwInput" class="input" placeholder="Admin password" autofocus>
+  <button class="btn btn-accent" onclick="tryLogin()">Sign In</button>
+  <div id="loginError" style="color:var(--danger);text-align:center;margin-top:12px;font-size:0.85rem;display:none;"></div>
+</div>
+
+<!-- Admin panel -->
+<div id="adminView" class="admin-wrap" style="display:none;">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+    <div class="logo">
+      <div class="logo-mark">🎱</div>
+      Pool Cue Admin
+    </div>
+    <button class="action-btn" onclick="logout()">Sign Out</button>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="bars" onclick="switchTab('bars')">Bars</button>
+    <button class="tab" data-tab="ads" onclick="switchTab('ads')">Ads</button>
+    <button class="tab" data-tab="reports" onclick="switchTab('reports')">Reports</button>
+  </div>
+
+  <!-- BARS PANEL -->
+  <div class="panel active" id="panel-bars">
+    <div class="section-title">Add New Bar</div>
+    <div class="form-row">
+      <input class="input" id="barName" placeholder="Bar name (e.g. Flanagan's)">
+      <input class="input" id="barSlug" placeholder="URL slug (e.g. flanagans)">
+    </div>
+    <div class="form-row">
+      <input class="input" id="barAddress" placeholder="Address (optional)">
+      <input class="input" id="barContact" placeholder="Contact name (optional)">
+      <button class="btn btn-accent" onclick="addBar()">Add Bar</button>
+    </div>
+
+    <div class="section-title" style="margin-top:24px;">Your Bars</div>
+    <table>
+      <thead><tr><th>Name</th><th>Slug / Table Code</th><th>Address</th><th>Status</th><th></th></tr></thead>
+      <tbody id="barsTable"></tbody>
+    </table>
+  </div>
+
+  <!-- ADS PANEL -->
+  <div class="panel" id="panel-ads">
+    <div class="section-title">Create New Ad</div>
+    <div class="form-row">
+      <input class="input" id="adAdvertiser" placeholder="Advertiser name (e.g. Joe's Pizza)">
+    </div>
+    <div class="ad-upload-area" id="adUploadArea" onclick="document.getElementById('adFileInput').click()">
+      <div id="adUploadText">Click to upload banner image<br><span style="font-size:0.75rem;">(recommended: 1080 × 120px, PNG or JPG)</span></div>
+      <img id="adPreviewImg" style="display:none;">
+      <input type="file" id="adFileInput" accept="image/*" style="display:none" onchange="previewAdImage(this)">
+    </div>
+    <div class="form-row">
+      <input class="input" type="date" id="adStartDate" placeholder="Start date">
+      <input class="input" type="date" id="adEndDate" placeholder="End date">
+    </div>
+    <div class="section-title">Show at these bars:</div>
+    <div class="bar-checks" id="adBarChecks"></div>
+    <button class="btn btn-accent" onclick="createAd()">Create Ad</button>
+
+    <div class="section-title" style="margin-top:24px;">All Ads</div>
+    <table>
+      <thead><tr><th>Preview</th><th>Advertiser</th><th>Bars</th><th>Dates</th><th>Status</th><th></th></tr></thead>
+      <tbody id="adsTable"></tbody>
+    </table>
+  </div>
+
+  <!-- REPORTS PANEL -->
+  <div class="panel" id="panel-reports">
+    <div class="section-title">Ad Impressions</div>
+    <div id="reportsList"></div>
+    <div id="reportsEmpty" style="color:var(--muted);text-align:center;padding:40px;display:none;">
+      No impression data yet. Ads need to be running on boards to collect data.
+    </div>
+  </div>
+
+</div>
+
+<script>
+let adminPw = '';
+let barsCache = [];
+let adsCache = [];
+let pendingImageData = null;
+let pendingImageType = null;
+
+// ============================================
+// Auth
+// ============================================
+
+function tryLogin() {
+  adminPw = document.getElementById('pwInput').value;
+  apiFetch('/api/admin/bars').then(data => {
+    if (data.error) {
+      document.getElementById('loginError').textContent = 'Wrong password';
+      document.getElementById('loginError').style.display = 'block';
+      return;
+    }
+    document.getElementById('loginView').style.display = 'none';
+    document.getElementById('adminView').style.display = 'block';
+    barsCache = data.bars || [];
+    renderBars();
+    loadAds();
+  });
+}
+document.getElementById('pwInput').addEventListener('keydown', e => { if (e.key === 'Enter') tryLogin(); });
+
+function logout() {
+  adminPw = '';
+  document.getElementById('adminView').style.display = 'none';
+  document.getElementById('loginView').style.display = '';
+  document.getElementById('pwInput').value = '';
+}
+
+async function apiFetch(url, opts = {}) {
+  const headers = { 'x-admin-password': adminPw, ...(opts.headers || {}) };
+  if (opts.body && typeof opts.body === 'object') {
+    headers['Content-Type'] = 'application/json';
+    opts.body = JSON.stringify(opts.body);
+  }
+  try {
+    const res = await fetch(url, { ...opts, headers });
+    return await res.json();
+  } catch (err) { return { error: err.message }; }
+}
+
+// ============================================
+// Tabs
+// ============================================
+
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+  document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === 'panel-' + name));
+  if (name === 'ads') loadAds();
+  if (name === 'reports') loadReports();
+}
+
+// ============================================
+// Bars
+// ============================================
+
+async function addBar() {
+  const name = document.getElementById('barName').value.trim();
+  const slug = document.getElementById('barSlug').value.trim();
+  if (!name || !slug) return alert('Name and slug are required');
+  const data = await apiFetch('/api/admin/bars', {
+    method: 'POST',
+    body: { name, slug, address: document.getElementById('barAddress').value.trim(),
+            contactName: document.getElementById('barContact').value.trim() }
+  });
+  if (data.error) return alert('Error: ' + data.error);
+  barsCache.push(data.bar);
+  renderBars();
+  document.getElementById('barName').value = '';
+  document.getElementById('barSlug').value = '';
+  document.getElementById('barAddress').value = '';
+  document.getElementById('barContact').value = '';
+}
+
+function renderBars() {
+  const tbody = document.getElementById('barsTable');
+  if (barsCache.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" style="color:var(--muted);text-align:center;padding:20px;">No bars yet</td></tr>';
+    return;
+  }
+  tbody.innerHTML = barsCache.map(b => `<tr>
+    <td><strong>${esc(b.name)}</strong></td>
+    <td><code style="color:var(--accent)">${esc(b.slug)}</code></td>
+    <td style="color:var(--dim)">${esc(b.address || '—')}</td>
+    <td>${b.active ? '<span class="badge badge-green">Active</span>' : '<span class="badge badge-red">Inactive</span>'}</td>
+    <td><button class="action-btn" onclick="toggleBar(${b.id}, ${!b.active})">${b.active ? 'Deactivate' : 'Activate'}</button></td>
+  </tr>`).join('');
+}
+
+async function toggleBar(id, active) {
+  await apiFetch('/api/admin/bars/' + id, { method: 'PUT', body: { active } });
+  const bar = barsCache.find(b => b.id === id);
+  if (bar) bar.active = active;
+  renderBars();
+}
+
+// ============================================
+// Ads
+// ============================================
+
+function previewAdImage(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    const base64 = reader.result.split(',')[1];
+    pendingImageData = base64;
+    pendingImageType = file.type;
+    document.getElementById('adPreviewImg').src = reader.result;
+    document.getElementById('adPreviewImg').style.display = 'block';
+    document.getElementById('adUploadText').textContent = file.name;
+  };
+  reader.readAsDataURL(file);
+}
+
+async function loadAds() {
+  const data = await apiFetch('/api/admin/ads');
+  adsCache = data.ads || [];
+  renderAds();
+  renderBarChecks();
+}
+
+function renderBarChecks() {
+  const el = document.getElementById('adBarChecks');
+  el.innerHTML = barsCache.filter(b => b.active).map(b =>
+    `<label class="bar-check" onclick="this.classList.toggle('checked')">
+      <input type="checkbox" value="${b.id}"> ${esc(b.name)}
+    </label>`
+  ).join('');
+}
+
+async function createAd() {
+  const name = document.getElementById('adAdvertiser').value.trim();
+  if (!name) return alert('Advertiser name required');
+  if (!pendingImageData) return alert('Please upload a banner image');
+  const checkedBars = [...document.querySelectorAll('#adBarChecks input:checked')].map(c => parseInt(c.value));
+  if (checkedBars.length === 0) return alert('Select at least one bar');
+
+  const data = await apiFetch('/api/admin/ads', {
+    method: 'POST',
+    body: {
+      advertiserName: name, imageData: pendingImageData, imageType: pendingImageType,
+      startDate: document.getElementById('adStartDate').value || null,
+      endDate: document.getElementById('adEndDate').value || null,
+      targetBarIds: checkedBars
+    }
+  });
+  if (data.error) return alert('Error: ' + data.error);
+  // Reset form
+  document.getElementById('adAdvertiser').value = '';
+  document.getElementById('adFileInput').value = '';
+  document.getElementById('adPreviewImg').style.display = 'none';
+  document.getElementById('adUploadText').innerHTML = 'Click to upload banner image<br><span style="font-size:0.75rem;">(recommended: 1080 × 120px, PNG or JPG)</span>';
+  document.getElementById('adStartDate').value = '';
+  document.getElementById('adEndDate').value = '';
+  pendingImageData = null;
+  pendingImageType = null;
+  await loadAds();
+}
+
+function renderAds() {
+  const tbody = document.getElementById('adsTable');
+  if (adsCache.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" style="color:var(--muted);text-align:center;padding:20px;">No ads yet</td></tr>';
+    return;
+  }
+  tbody.innerHTML = adsCache.map(a => {
+    const barNames = (a.target_bar_ids || []).map(id => {
+      const bar = barsCache.find(b => b.id === id);
+      return bar ? esc(bar.name) : '?';
+    }).join(', ') || '—';
+    const dates = [a.start_date?.slice(0,10), a.end_date?.slice(0,10)].filter(Boolean).join(' → ') || 'Always';
+    return `<tr>
+      <td><img src="/api/ads/image/${a.id}" class="ad-preview" onerror="this.style.display='none'"></td>
+      <td><strong>${esc(a.advertiser_name)}</strong></td>
+      <td style="font-size:0.8rem;color:var(--dim);">${barNames}</td>
+      <td style="font-size:0.8rem;color:var(--dim);">${dates}</td>
+      <td>${a.active ? '<span class="badge badge-green">Live</span>' : '<span class="badge badge-dim">Off</span>'}</td>
+      <td>
+        <button class="action-btn" onclick="toggleAd(${a.id}, ${!a.active})">${a.active ? 'Pause' : 'Resume'}</button>
+        <button class="action-btn danger" onclick="deleteAd(${a.id})">Delete</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+async function toggleAd(id, active) {
+  await apiFetch('/api/admin/ads/' + id, { method: 'PUT', body: { active } });
+  await loadAds();
+}
+
+async function deleteAd(id) {
+  if (!confirm('Delete this ad permanently?')) return;
+  await apiFetch('/api/admin/ads/' + id, { method: 'DELETE' });
+  await loadAds();
+}
+
+// ============================================
+// Reports
+// ============================================
+
+async function loadReports() {
+  const data = await apiFetch('/api/admin/impressions');
+  const report = data.report || [];
+  const el = document.getElementById('reportsList');
+  const empty = document.getElementById('reportsEmpty');
+
+  if (report.length === 0) {
+    el.innerHTML = '';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+
+  el.innerHTML = report.map(r => `
+    <div class="report-card">
+      <div class="report-header">
+        <div>
+          <strong>${esc(r.advertiser_name)}</strong>
+          <span style="color:var(--dim);font-size:0.8rem;margin-left:8px;">at ${esc(r.bar_name)}</span>
+        </div>
+      </div>
+      <div class="report-nums">
+        <div class="report-num"><div class="val">${num(r.today)}</div><div class="lbl">Today</div></div>
+        <div class="report-num"><div class="val">${num(r.this_week)}</div><div class="lbl">This Week</div></div>
+        <div class="report-num"><div class="val">${num(r.this_month)}</div><div class="lbl">This Month</div></div>
+        <div class="report-num"><div class="val">${num(r.total)}</div><div class="lbl">All Time</div></div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function num(n) { return (parseInt(n) || 0).toLocaleString(); }
+
+// ============================================
+// Util
+// ============================================
+
+function esc(str) {
+  if (!str) return '';
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+</script>
+</body>
+</html>
