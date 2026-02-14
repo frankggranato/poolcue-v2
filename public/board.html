@@ -60,14 +60,17 @@
             flex: 1; min-height: 0;
         }
 
-        /* Header */
+        /* Header — Now Playing zone */
         .header {
-            display: flex; justify-content: space-between; align-items: flex-start;
-            padding: 12px 20px;
+            display: flex; flex-direction: column;
+            padding: 12px 20px 8px;
             border-bottom: 1px solid rgba(255,255,255,0.06);
         }
+        .header-top {
+            display: flex; justify-content: space-between; align-items: flex-start;
+        }
         .shot-caller-section { flex: 1; }
-        .meta { font-size: 0.65rem; color: #666; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+        .now-playing-label { font-size: 1rem; font-weight: 800; color: #e5a147; text-transform: uppercase; letter-spacing: 3px; margin-bottom: 2px; }
         .shot-caller-name { font-size: 2rem; font-weight: 700; color: #fff; letter-spacing: -0.03em; line-height: 1.1; transition: opacity 0.2s; }
         .shot-caller-name.flash { animation: nameFlash 0.5s ease-out; }
         @keyframes nameFlash {
@@ -75,6 +78,7 @@
             100% { opacity: 1; transform: scale(1); }
         }
         .shot-caller-name.empty { font-size: 1.3rem; color: #444; font-weight: 500; }
+        .meta { font-size: 0.65rem; color: #666; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
         .win-streak { display: flex; align-items: baseline; gap: 6px; margin-top: 4px; }
         .win-count { font-size: 1.2rem; font-weight: 700; color: #e5a147; }
         .win-label { font-size: 0.7rem; color: #666; }
@@ -121,27 +125,30 @@
             margin-bottom: 6px;
         }
 
-        /* Challenger Card */
-        .challenger-card {
-            background: #1a1a1a;
-            border: 1px solid rgba(239,68,68,0.3);
-            border-radius: 5px;
-            padding: 8px 12px;
-            animation: slideIn 0.3s ease-out;
-            width: calc(50% - 5px);
+        /* Challenger Section — static element in header */
+        .challenger-section {
+            margin-top: 8px;
+            padding: 8px 0 0;
+            border-top: 1px solid rgba(255,255,255,0.08);
         }
-        .challenger-card .name-row { display: flex; align-items: center; gap: 8px; }
-        .challenger-card .pos { font-size: 0.9rem; color: #ef4444; min-width: 20px; font-weight: 500; }
-        .challenger-card .name { font-size: 1rem; font-weight: 600; color: #fff; }
-        .challenger-card .hint { font-size: 0.6rem; color: #444; margin-top: 2px; margin-left: 28px; }
+        .challenger-label { font-size: 0.9rem; font-weight: 800; color: #ef4444; text-transform: uppercase; letter-spacing: 3px; margin-bottom: 2px; }
+        .challenger-name { font-size: 1.6rem; font-weight: 600; color: #fff; line-height: 1.2; transition: opacity 0.2s; }
+        .challenger-name .partner { color: #aaa; }
+        .challenger-status { margin-top: 2px; }
+        .challenger-section .hint { font-size: 0.7rem; color: #444; margin-top: 2px; }
+        .challenger-section.empty { display: none; }
         .hint { font-size: 0.7rem; color: #444; }
+
+        /* Rules row — sits below challenger */
+        .header-rules { margin-top: 8px; }
 
         /* Swipe states */
         .shot-caller-section.swiping { transition: none; }
         .shot-caller-section.swipe-left { background: rgba(239,68,68,0.1); }
         .shot-caller-section.swipe-right { background: rgba(34,197,94,0.1); }
-        .challenger-card.swiping { cursor: grabbing; }
-        .challenger-card.swipe-left, .challenger-card.swipe-right { background: rgba(239,68,68,0.2); border-color: rgba(239,68,68,0.4); }
+        .challenger-section.swiping { cursor: grabbing; }
+        .challenger-section.swipe-left { background: rgba(239,68,68,0.1); }
+        .challenger-section.swipe-right { background: rgba(239,68,68,0.1); }
 
         /* Queue Items */
         .queue-item {
@@ -151,7 +158,6 @@
             border-radius: 5px;
             animation: slideIn 0.3s ease-out;
             width: calc(50% - 5px);
-        }
         }
         @keyframes slideIn {
             from { opacity: 0; transform: translateY(-8px); }
@@ -280,44 +286,29 @@
         body.kiosk .board { border-radius: 0; }
 
         /* Debug panel */
-        .debug-panel {
-            position: fixed; bottom: 0; left: 0; right: 0;
-            background: #111; border-top: 2px solid #f5c518;
-            padding: 10px 16px; display: none; z-index: 50;
-            gap: 8px; flex-wrap: wrap; align-items: center;
-        }
+        .debug-panel { position:fixed;bottom:0;left:0;right:0;background:#111;border-top:2px solid #f5c518;padding:10px 16px;display:none;z-index:50;gap:8px;flex-wrap:wrap;align-items:center; }
         .debug-panel.show { display: flex; }
-        .debug-panel button {
-            padding: 8px 14px; border: 1px solid #333; border-radius: 6px;
-            background: #1a1a1a; color: #fff; font-size: 0.75rem;
-            font-family: inherit; font-weight: 600; cursor: pointer;
-        }
-        .debug-panel button:active { background: #333; }
-        .debug-panel .debug-label {
-            font-size: 0.65rem; color: #f5c518; font-weight: 700;
-            text-transform: uppercase; letter-spacing: 1px;
-        }
+        .debug-panel button { padding:8px 14px;border:1px solid #333;border-radius:6px;background:#1a1a1a;color:#fff;font-size:0.75rem;font-family:inherit;font-weight:600;cursor:pointer; }
+        .debug-panel button:active { background:#333; }
+        .debug-panel .debug-label { font-size:0.65rem;color:#f5c518;font-weight:700;text-transform:uppercase;letter-spacing:1px; }
     </style>
 </head>
 <body>
     <div class="frame">
     <div class="board">
         <div id="board-content">
-            <!-- Header: shot caller + QR -->
+            <!-- Header: Now Playing zone -->
             <div class="header">
+                <div class="header-top">
                 <div class="shot-caller-section swipeable" id="kingSection" data-role="king">
                     <div class="meta" id="avgTimeLabel"></div>
-                    <div class="meta">Shot Caller</div>
+                    <div class="now-playing-label">Shot Caller</div>
                     <div class="shot-caller-name" id="kingName">Table Open</div>
                     <div class="win-streak" id="winStreak" style="display:none;">
                         <span class="win-count" id="winCount">0</span>
                         <span class="win-label">wins</span>
                     </div>
                     <div class="hint" id="kingHint" style="display:none;">← swipe if lost →</div>
-                    <div class="rules" id="rulesDisplay">
-                        <span class="rule-tag" id="tagGameType">Singles</span>
-                        <span class="rule-tag" id="tagRuleType">Bar Rules</span>
-                    </div>
                 </div>
                 <div class="qr-section">
                     <div class="qr-box">
@@ -359,7 +350,23 @@
                         </g>
                     </svg>
                 </div>
+            </div> <!-- /header-top -->
+
+            <!-- Challenger — static element, updated by render() -->
+            <div class="challenger-section swipeable" id="challengerSection" data-role="challenger" style="display:none;">
+                <div class="challenger-label">Challenger</div>
+                <div class="challenger-name" id="challengerName"></div>
+                <div class="challenger-status" id="challengerStatus"></div>
+                <div class="hint" id="challengerHint" style="display:none;">← swipe if lost →</div>
             </div>
+
+            <div class="header-rules">
+                <div class="rules" id="rulesDisplay">
+                    <span class="rule-tag" id="tagGameType">Singles</span>
+                    <span class="rule-tag" id="tagRuleType">Bar Rules</span>
+                </div>
+            </div>
+            </div> <!-- /header -->
 
             <!-- Main queue area -->
             <div class="main" id="mainContent"></div>
@@ -598,33 +605,35 @@
         // Rules tags
         renderRules();
 
-        // Main content: challenger + queue
+        // Main content: challenger (static header) + queue
         const challenger = queue.find(e => e.position === 2);
         const waiting = queue.filter(e => e.position >= 3).sort((a, b) => a.position - b.position || a.id - b.id);
         const displayWaiting = waiting;
 
-        // Challenger card (first item in column 1)
-        let challengerHtml = '';
+        // Update static challenger section in header
+        const chalSection = document.getElementById('challengerSection');
+        const chalNameEl = document.getElementById('challengerName');
+        const chalStatusEl = document.getElementById('challengerStatus');
+        const chalHintEl = document.getElementById('challengerHint');
         if (challenger) {
-            const partnerStr = challenger.partner_name ? ` & ${esc(challenger.partner_name)}` : '';
-            let chalStatusHtml = '';
+            const partnerStr = challenger.partner_name ? ` <span class="partner">& ${esc(challenger.partner_name)}</span>` : '';
+            chalNameEl.innerHTML = esc(challenger.player_name) + partnerStr;
+            let statusHtml = '';
             if (challenger.status === 'confirmed') {
-                chalStatusHtml = '<span class="confirm-status confirmed">✓ Here</span>';
+                statusHtml = '<span class="confirm-status confirmed">✓ Here</span>';
             } else if (challenger.status === 'ghosted') {
-                chalStatusHtml = '<span class="confirm-status" style="color:#ef4444;background:rgba(239,68,68,0.15)">🔴 Probably left</span>';
+                statusHtml = '<span class="confirm-status" style="color:#ef4444;background:rgba(239,68,68,0.15)">🔴 Probably left</span>';
             } else if (challenger.status === 'mia') {
-                chalStatusHtml = '<span class="confirm-status" style="color:#f97316;background:rgba(249,115,22,0.15)">🟠 MIA</span>';
+                statusHtml = '<span class="confirm-status" style="color:#f97316;background:rgba(249,115,22,0.15)">🟠 MIA</span>';
             } else if (challenger.confirmation_sent_at) {
-                chalStatusHtml = '<span class="confirm-status">🟡 Waiting</span>';
+                statusHtml = '<span class="confirm-status">🟡 Waiting</span>';
             }
-            challengerHtml = `<div class="challenger-card swipeable" data-role="challenger">
-                <div class="name-row">
-                    <span class="pos">2</span>
-                    <span class="name">${esc(challenger.player_name)}${partnerStr}</span>
-                    ${chalStatusHtml}
-                </div>
-                ${queue.some(e => e.position === 2) ? '<div class="hint">← swipe if lost →</div>' : ''}
-            </div>`;
+            chalStatusEl.innerHTML = statusHtml;
+            chalHintEl.style.display = 'block';
+            chalSection.style.display = '';
+        } else {
+            chalSection.style.display = 'none';
+        }
         }
 
         // Queue items (capped at MAX_DISPLAY)
@@ -658,20 +667,18 @@
         }
 
         // Output all items sequentially - CSS flex-wrap handles the two columns
-        const html = challengerHtml + queueItems.join('');
+        const html = queueItems.join('');
 
         // Only update DOM if content actually changed (prevents blink)
         if (mainEl.dataset.lastHtml !== html) {
             console.log('[RENDER] Rebuilding DOM, html length:', html.length);
             mainEl.innerHTML = html;
             mainEl.dataset.lastHtml = html;
-            // Re-attach swipe handlers only to new challenger card (not king header)
-            attachSwipeHandlers(mainEl);
 
             // Fill remaining space with empty placeholder slots (like empty chalkboard lines)
             // Also trim any items that overflow the container and show "+X more"
             requestAnimationFrame(() => {
-                const allItems = Array.from(mainEl.querySelectorAll('.queue-item, .challenger-card'));
+                const allItems = Array.from(mainEl.querySelectorAll('.queue-item'));
                 if (allItems.length === 0) return;
                 const mainRect = mainEl.getBoundingClientRect();
                 const itemHeight = allItems[0].offsetHeight + 6;
@@ -690,7 +697,7 @@
                 // Show "+X more" if items were hidden
                 if (hiddenCount > 0) {
                     // Remove last visible item in column 2 to make room
-                    const remaining = Array.from(mainEl.querySelectorAll('.queue-item, .challenger-card'));
+                    const remaining = Array.from(mainEl.querySelectorAll('.queue-item'));
                     const lastItem = remaining[remaining.length - 1];
                     if (lastItem) { lastItem.remove(); hiddenCount++; }
                     const overflow = document.createElement('div');
@@ -814,81 +821,39 @@
     }
 
     function hideConfirm() {
-        const dbg = [];
-        dbg.push('hideConfirm called');
         document.getElementById('confirmOverlay').classList.remove('show');
         pendingAction = null;
-        
-        // currentEl is null here (handleSwipe clears it) — but we still need to fix the DOM
-        dbg.push('currentEl: ' + (currentEl ? currentEl.className : 'NULL'));
-        if (currentEl) {
-            currentEl.style.transform = '';
-            currentEl.style.opacity = '';
-            currentEl.classList.remove('swiping', 'swipe-left', 'swipe-right');
-        }
         currentEl = null;
         
-        // Reset king section
+        // Reset both static sections — both are persistent DOM elements now
         const kingEl = document.getElementById('kingSection');
         kingEl.style.transform = '';
         kingEl.style.opacity = '';
         kingEl.classList.remove('swiping', 'swipe-left', 'swipe-right');
         
-        // Reset challenger card directly
-        const chalEl = document.querySelector('.challenger-card');
-        dbg.push('chalEl found: ' + !!chalEl);
-        if (chalEl) {
-            dbg.push('chalEl transform: ' + chalEl.style.transform);
-            dbg.push('chalEl opacity: ' + chalEl.style.opacity);
-            chalEl.style.transform = '';
-            chalEl.style.opacity = '';
-            chalEl.classList.remove('swiping', 'swipe-left', 'swipe-right');
-            dbg.push('chalEl AFTER reset - transform: "' + chalEl.style.transform + '" opacity: "' + chalEl.style.opacity + '"');
-        }
+        const chalEl = document.getElementById('challengerSection');
+        chalEl.style.transform = '';
+        chalEl.style.opacity = '';
+        chalEl.classList.remove('swiping', 'swipe-left', 'swipe-right');
         
-        // Check DOM state
-        const mainEl = document.getElementById('main');
-        const cards = mainEl.querySelectorAll('.challenger-card, .queue-item');
-        dbg.push('main children: ' + cards.length);
-        
-        // Force DOM rebuild
-        mainEl.dataset.lastHtml = '';
         render();
-        
-        // Check AFTER render
-        const afterChal = document.querySelector('.challenger-card');
-        dbg.push('AFTER render chalEl: ' + !!afterChal);
-        if (afterChal) {
-            const rect = afterChal.getBoundingClientRect();
-            dbg.push('rect: ' + JSON.stringify({t:rect.top,l:rect.left,w:rect.width,h:rect.height}));
-            dbg.push('display: ' + getComputedStyle(afterChal).display);
-            dbg.push('visibility: ' + getComputedStyle(afterChal).visibility);
-            dbg.push('opacity(computed): ' + getComputedStyle(afterChal).opacity);
-        }
-        
-        // Show debug on screen for 8 seconds
-        let debugEl = document.getElementById('cancelDebug');
-        if (!debugEl) {
-            debugEl = document.createElement('div');
-            debugEl.id = 'cancelDebug';
-            debugEl.style.cssText = 'position:fixed;bottom:60px;left:10px;right:10px;background:rgba(0,0,0,0.95);color:#0f0;font-size:11px;padding:10px;z-index:999;font-family:monospace;white-space:pre-wrap;border:1px solid #0f0;border-radius:6px;max-height:40vh;overflow:auto;';
-            document.body.appendChild(debugEl);
-        }
-        debugEl.textContent = dbg.join('\n');
-        debugEl.style.display = 'block';
-        setTimeout(() => { debugEl.style.display = 'none'; }, 8000);
     }
 
     async function executeConfirm() {
         document.getElementById('confirmOverlay').classList.remove('show');
         if (!pendingAction) return;
 
-        // Reset king section inline styles IMMEDIATELY before any async work
-        // Otherwise a WebSocket render can arrive while king is still invisible
+        // Reset both static sections IMMEDIATELY before any async work
         const kingEl = document.getElementById('kingSection');
         kingEl.style.transform = '';
         kingEl.style.opacity = '';
         kingEl.classList.remove('swiping', 'swipe-left', 'swipe-right');
+        
+        const chalEl = document.getElementById('challengerSection');
+        chalEl.style.transform = '';
+        chalEl.style.opacity = '';
+        chalEl.classList.remove('swiping', 'swipe-left', 'swipe-right');
+        
         render(); // Show something immediately (even old data) while API processes
 
         const action = pendingAction;
@@ -974,7 +939,7 @@
       document.getElementById('fsBtn').textContent = document.fullscreenElement ? '✕ Exit' : '⛶ Fullscreen';
     });
 
-    // Attach swipe to the king section in the header
+    // Attach swipe to king + challenger sections in the header (both are static .swipeable elements)
     attachSwipeHandlers();
 
     // Hidden kiosk exit: tap top-left corner 5 times quickly
