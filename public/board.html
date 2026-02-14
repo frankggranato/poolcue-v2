@@ -826,17 +826,28 @@
         document.getElementById('confirmOverlay').classList.remove('show');
         if (!pendingAction) return;
 
-        if (pendingAction.type === 'result') {
+        // Reset king section inline styles IMMEDIATELY before any async work
+        // Otherwise a WebSocket render can arrive while king is still invisible
+        const kingEl = document.getElementById('kingSection');
+        kingEl.style.transform = '';
+        kingEl.style.opacity = '';
+        kingEl.classList.remove('swiping', 'swipe-left', 'swipe-right');
+        render(); // Show something immediately (even old data) while API processes
+
+        const action = pendingAction;
+        pendingAction = null;
+
+        if (action.type === 'result') {
             try {
                 await fetch('/api/result', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ tableCode: TABLE_CODE, result: pendingAction.result })
+                    body: JSON.stringify({ tableCode: TABLE_CODE, result: action.result })
                 });
             } catch (err) {
                 console.error('Result API error:', err);
             }
-        } else if (pendingAction.type === 'undo') {
+        } else if (action.type === 'undo') {
             try {
                 const res = await fetch('/api/undo', {
                     method: 'POST',
@@ -849,14 +860,7 @@
                 console.error('Undo API error:', err);
             }
         }
-        pendingAction = null;
-        // Reset king section inline styles from swipe animation
-        const kingEl = document.getElementById('kingSection');
-        kingEl.style.transform = '';
-        kingEl.style.opacity = '';
-        kingEl.classList.remove('swiping', 'swipe-left', 'swipe-right');
-        // Force immediate re-render: fetch fresh state so board never shows
-        // stale/blank content while waiting for WebSocket update
+        // Force immediate re-render with fresh state
         try {
             const fresh = await fetch(`/api/queue/${TABLE_CODE}`).then(r => r.json());
             queue = fresh.queue || [];
