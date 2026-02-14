@@ -485,7 +485,7 @@ async function triggerConfirmations(tableCode) {
   return false;
 }
 
-// Periodic confirmation checker — runs every 30 seconds
+// Periodic confirmation checker — runs every 10 seconds
 setInterval(async () => {
   try {
     const activeTables = new Set();
@@ -499,7 +499,7 @@ setInterval(async () => {
   } catch (err) {
     console.error('Confirmation timer error:', err);
   }
-}, 30000);
+}, 10000);
 
 // ============================================
 // Health check + startup

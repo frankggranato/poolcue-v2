@@ -744,6 +744,7 @@ async function checkConfirmationTimeouts(sessionId) {
           [entry.id]
         );
       }
+      actions.push({ action: 'tag_cleared', id: entry.id, name: entry.player_name, position: entry.position });
     }
   }
 
