@@ -349,9 +349,9 @@ await test('Confirmed player promoted to challenger — status cleared (at table
   const q = await getQ(sid);
   const c = q.find(e => e.player_name === 'C');
   assert(c.position === 2, 'C challenger');
-  // Challenger keeps their tag for 45 seconds after promotion
-  assert(c.status === 'confirmed', 'Confirmed status stays on challenger for 45s');
-  console.log(`  T${testNum} ✓ C promoted, confirmed tag stays 45s`);
+  // Challenger keeps their tag for 30 seconds after promotion
+  assert(c.status === 'confirmed', 'Confirmed status stays on challenger for 30s');
+  console.log(`  T${testNum} ✓ C promoted, confirmed tag stays 30s`);
 });
 
 await test('New pos 3 gets asked after game ends', async () => {
