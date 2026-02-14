@@ -899,5 +899,6 @@ module.exports = {
     mem.queue_entries = [];
     mem.game_log = [];
     mem._idCounters = { sessions: 0, queue_entries: 0, game_log: 0 };
-  }
+  },
+  _getMemory() { return mem; }
 };
