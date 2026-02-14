@@ -738,19 +738,22 @@ async function checkConfirmationTimeouts(sessionId) {
     });
   }
 
-  // Cleanup: null out snapshots older than 12 hours
-  // Keeps game_log for stats but frees the JSONB storage
-  if (useMemory) {
-    const cutoff = new Date(Date.now() - 12 * 60 * 60 * 1000);
-    for (const g of mem.game_log) {
-      if (g.queue_snapshot && new Date(g.ended_at) < cutoff) g.queue_snapshot = null;
+  // Cleanup: null out snapshots older than 12 hours (runs every ~2 min, not every tick)
+  const now2 = Date.now();
+  if (!checkConfirmationTimeouts._lastCleanup || now2 - checkConfirmationTimeouts._lastCleanup > 2 * 60 * 1000) {
+    checkConfirmationTimeouts._lastCleanup = now2;
+    if (useMemory) {
+      const cutoff = new Date(now2 - 12 * 60 * 60 * 1000);
+      for (const g of mem.game_log) {
+        if (g.queue_snapshot && new Date(g.ended_at) < cutoff) g.queue_snapshot = null;
+      }
+    } else {
+      await pool.query(
+        `UPDATE game_log SET queue_snapshot = NULL
+         WHERE session_id = $1 AND queue_snapshot IS NOT NULL AND ended_at < NOW() - INTERVAL '12 hours'`,
+        [sessionId]
+      );
     }
-  } else {
-    await pool.query(
-      `UPDATE game_log SET queue_snapshot = NULL
-       WHERE session_id = $1 AND queue_snapshot IS NOT NULL AND ended_at < NOW() - INTERVAL '12 hours'`,
-      [sessionId]
-    );
   }
 
   return actions;
