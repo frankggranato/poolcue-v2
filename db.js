@@ -482,11 +482,7 @@ async function undoLastRemoval(sessionId) {
 
   if (!lastLog) return { error: 'nothing_to_undo' };
 
-  // 2. Check undo window (60 seconds from game end)
-  const elapsed = (Date.now() - new Date(lastLog.ended_at).getTime()) / 1000;
-  if (elapsed > 60) return { error: 'undo_expired' };
-
-  // 3. Get the snapshot
+  // Snapshots kept for 12 hours — if no snapshot, it's been cleaned up
   const snapshot = lastLog.queue_snapshot;
   if (!snapshot || snapshot.length === 0) return { error: 'nothing_to_undo' };
 
@@ -742,17 +738,17 @@ async function checkConfirmationTimeouts(sessionId) {
     });
   }
 
-  // Cleanup: null out snapshots older than 5 minutes (undo window is 60s)
+  // Cleanup: null out snapshots older than 12 hours
   // Keeps game_log for stats but frees the JSONB storage
   if (useMemory) {
-    const cutoff = new Date(Date.now() - 5 * 60 * 1000);
+    const cutoff = new Date(Date.now() - 12 * 60 * 60 * 1000);
     for (const g of mem.game_log) {
       if (g.queue_snapshot && new Date(g.ended_at) < cutoff) g.queue_snapshot = null;
     }
   } else {
     await pool.query(
       `UPDATE game_log SET queue_snapshot = NULL
-       WHERE session_id = $1 AND queue_snapshot IS NOT NULL AND ended_at < NOW() - INTERVAL '5 minutes'`,
+       WHERE session_id = $1 AND queue_snapshot IS NOT NULL AND ended_at < NOW() - INTERVAL '12 hours'`,
       [sessionId]
     );
   }
