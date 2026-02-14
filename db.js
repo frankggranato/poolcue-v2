@@ -426,6 +426,21 @@ async function recordResult(sessionId, result) {
   // and renumbers everyone sequentially
   await compactPositions(sessionId);
 
+  // Refresh the new challenger's confirmation timer so their tag stays for 45s
+  // This makes the "Waiting" tag visible on the challenger card after promotion
+  const updatedQueue = await getQueue(sessionId);
+  const newChallenger = updatedQueue.find(e => e.position === 2);
+  if (newChallenger && newChallenger.confirmation_sent_at) {
+    if (useMemory) {
+      newChallenger.confirmation_sent_at = now;
+    } else {
+      await pool.query(
+        'UPDATE queue_entries SET confirmation_sent_at = NOW() WHERE id = $1',
+        [newChallenger.id]
+      );
+    }
+  }
+
   // Log the game (with snapshot for undo)
   if (useMemory) {
     mem.game_log.push({
@@ -708,9 +723,15 @@ async function checkConfirmationTimeouts(sessionId) {
   const now = Date.now();
   const actions = [];
 
-  // STEP 1: Reset confirmation state for pos 1-2 (they're at the table playing)
+  // STEP 1: Reset confirmation state for pos 1 (king is at the table, never needs tags)
+  // Pos 2 (challenger): keep their tag for 45 seconds so crowd sees their status
   for (const entry of queue) {
-    if (entry.position <= 2 && (entry.status === 'confirmed' || entry.status === 'mia' || entry.status === 'ghosted' || entry.confirmation_sent_at)) {
+    const shouldClear =
+      (entry.position === 1 && (entry.status === 'confirmed' || entry.status === 'mia' || entry.status === 'ghosted' || entry.confirmation_sent_at)) ||
+      (entry.position === 2 && entry.confirmation_sent_at &&
+        (now - new Date(entry.confirmation_sent_at).getTime()) / 1000 >= 45);
+
+    if (shouldClear) {
       if (useMemory) {
         entry.status = 'waiting';
         entry.confirmation_sent_at = null;

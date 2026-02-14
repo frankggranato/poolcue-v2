@@ -814,7 +814,11 @@
     function hideConfirm() {
         document.getElementById('confirmOverlay').classList.remove('show');
         pendingAction = null;
-        // Re-render to reset visuals
+        // Reset king section inline styles from swipe animation
+        const kingEl = document.getElementById('kingSection');
+        kingEl.style.transform = '';
+        kingEl.style.opacity = '';
+        kingEl.classList.remove('swiping', 'swipe-left', 'swipe-right');
         render();
     }
 
@@ -846,6 +850,11 @@
             }
         }
         pendingAction = null;
+        // Reset king section inline styles from swipe animation
+        const kingEl = document.getElementById('kingSection');
+        kingEl.style.transform = '';
+        kingEl.style.opacity = '';
+        kingEl.classList.remove('swiping', 'swipe-left', 'swipe-right');
         // Force immediate re-render: fetch fresh state so board never shows
         // stale/blank content while waiting for WebSocket update
         try {
