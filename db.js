@@ -1337,5 +1337,6 @@ module.exports = {
     mem.ad_impressions = [];
     mem._idCounters = { sessions: 0, queue_entries: 0, game_log: 0, bars: 0, ads: 0, ad_bar_targets: 0, ad_impressions: 0 };
   },
-  _getMemory() { return mem; }
+  _getMemory() { return mem; },
+  _getMemEntry(id) { return mem.queue_entries.find(e => e.id === id); }
 };

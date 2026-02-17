@@ -619,7 +619,7 @@ function connectWS() {
       loadState();
     } else if (data.type === 'confirm_request' || data.type === 'player_mia' || data.type === 'player_removed' || data.type === 'player_ghosted') {
       loadState();
-    } else if (data.type === 'session_closed') {
+    } else if (data.type === 'session_closed' || data.type === 'daily_reset') {
       window.location.href = `/join/${TABLE_CODE}`;
     }
   };

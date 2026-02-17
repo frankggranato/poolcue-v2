@@ -67,8 +67,13 @@ wss.on('connection', (ws, req) => {
   const match = cookieHeader.match(/poolcue_phone=([^;]+)/);
   if (match) phoneId = match[1];
   if (tableCode) {
-    clients.set(ws, { tableCode, phoneId });
+    clients.set(ws, { tableCode, phoneId, alive: true });
   }
+
+  ws.on('pong', () => {
+    const info = clients.get(ws);
+    if (info) info.alive = true;
+  });
 
   ws.on('close', () => {
     clients.delete(ws);
@@ -78,6 +83,19 @@ wss.on('connection', (ws, req) => {
     clients.delete(ws);
   });
 });
+
+// WebSocket heartbeat — ping every 30s, kill dead connections
+setInterval(() => {
+  for (const [ws, info] of clients) {
+    if (!info.alive) {
+      clients.delete(ws);
+      ws.terminate();
+      continue;
+    }
+    info.alive = false;
+    ws.ping();
+  }
+}, 30000);
 
 function broadcast(tableCode, data) {
   const message = JSON.stringify(data);
@@ -425,10 +443,11 @@ app.get('/api/suggest-name', (req, res) => {
   res.json({ name: nicknames.suggest() });
 });
 
-// Debug: add a fake player (for testing queue flow — disabled in production)
+// Debug: add a fake player (PIN or board source required)
 app.post('/api/debug/add-fake', async (req, res) => {
   try {
-    const { tableCode } = req.body;
+    const { tableCode, pin, source } = req.body;
+    if (source !== 'board' && pin !== SESSION_PIN) return res.status(403).json({ error: 'bad_pin' });
     const session = await db.ensureSession(tableCode);
     if (session.status !== 'active') {
       return res.status(400).json({ error: 'table_closed' });
@@ -690,10 +709,10 @@ async function performDailyReset(dateStr) {
     const count = await db.closeAllSessions();
     console.log(`🔄 Daily reset (${dateStr} 8am ET): closed ${count} active session(s)`);
 
-    // Notify all connected boards to show welcome screen
+    // Notify all connected boards to reload fresh (daily reset)
     for (const [ws, info] of clients) {
       if (ws.readyState === 1) {
-        ws.send(JSON.stringify({ type: 'session_closed' }));
+        ws.send(JSON.stringify({ type: 'daily_reset' }));
       }
     }
   } catch (err) {

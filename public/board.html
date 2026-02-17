@@ -389,6 +389,14 @@
             transition: opacity 0.8s ease;
         }
         .idle-ad-side img.fade-out { opacity: 0; }
+
+        /* Connection status indicator */
+        .conn-status {
+            position: fixed; top: 6px; right: 10px;
+            font-size: 0.6rem; font-weight: 700; color: #ef4444;
+            background: rgba(0,0,0,0.7); padding: 3px 8px;
+            border-radius: 4px; z-index: 99; display: none;
+        }
         /* Adjust welcome padding when ads are framing it */
         .welcome-screen.has-ad {
             padding-top: 260px !important;
@@ -406,6 +414,7 @@
     </style>
 </head>
 <body>
+    <div class="conn-status" id="connStatus">⚠ Reconnecting...</div>
     <div class="frame">
     <div class="board">
         <div id="board-content">
@@ -750,9 +759,16 @@
                 session = { status: 'closed' };
                 queue = [];
                 render();
+            } else if (data.type === 'daily_reset') {
+                // Full page reload for kiosk health (clears JS state, timers, memory)
+                session = { status: 'closed' };
+                queue = [];
+                render();
+                setTimeout(() => location.reload(), 3000);
             }
         };
         ws.onopen = () => {
+            document.getElementById('connStatus').style.display = 'none';
             // Re-fetch full state on reconnect (covers any missed updates)
             fetch(`/api/queue/${TABLE_CODE}`).then(r => r.json()).then(data => {
                 queue = data.queue || [];
@@ -762,7 +778,10 @@
                 render();
             }).catch(() => {});
         };
-        ws.onclose = () => setTimeout(connectWS, 2000);
+        ws.onclose = () => {
+            document.getElementById('connStatus').style.display = 'block';
+            setTimeout(connectWS, 2000);
+        };
         ws.onerror = () => ws.close();
     }
 
@@ -1406,7 +1425,7 @@
         await fetch('/api/debug/add-fake', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ tableCode: TABLE_CODE })
+          body: JSON.stringify({ tableCode: TABLE_CODE, source: 'board' })
         });
       } catch (err) { console.error(err); }
     }
