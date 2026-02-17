@@ -19,7 +19,8 @@ const mem = {
   ads: [],
   ad_bar_targets: [],
   ad_impressions: [],
-  _idCounters: { sessions: 0, queue_entries: 0, game_log: 0, bars: 0, ads: 0, ad_bar_targets: 0, ad_impressions: 0 }
+  session_stats: [],
+  _idCounters: { sessions: 0, queue_entries: 0, game_log: 0, bars: 0, ads: 0, ad_bar_targets: 0, ad_impressions: 0, session_stats: 0 }
 };
 
 function nextId(table) {
@@ -128,6 +129,20 @@ async function createTables() {
       bar_id INTEGER REFERENCES bars(id) ON DELETE CASCADE,
       shown_at TIMESTAMP DEFAULT NOW()
     );
+
+    CREATE TABLE IF NOT EXISTS session_stats (
+      id SERIAL PRIMARY KEY,
+      table_code VARCHAR(10) NOT NULL,
+      session_id INTEGER,
+      opened_at TIMESTAMP,
+      closed_at TIMESTAMP DEFAULT NOW(),
+      total_joins INTEGER DEFAULT 0,
+      total_games INTEGER DEFAULT 0,
+      peak_queue INTEGER DEFAULT 0,
+      unique_players INTEGER DEFAULT 0,
+      avg_game_seconds INTEGER,
+      created_at TIMESTAMP DEFAULT NOW()
+    );
   `);
   // Migration: add mia_at column if missing (added after initial deploy)
   const colCheck = await pool.query(`
@@ -167,6 +182,17 @@ async function createTables() {
     console.log('✅ Migration: added queue_snapshot column to game_log');
   }
 
+  // Migration: add total_joins + peak_queue to sessions
+  const joinsCheck = await pool.query(`
+    SELECT column_name FROM information_schema.columns
+    WHERE table_name = 'sessions' AND column_name = 'total_joins'
+  `);
+  if (joinsCheck.rows.length === 0) {
+    await pool.query('ALTER TABLE sessions ADD COLUMN total_joins INTEGER DEFAULT 0');
+    await pool.query('ALTER TABLE sessions ADD COLUMN peak_queue INTEGER DEFAULT 0');
+    console.log('✅ Migration: added total_joins + peak_queue to sessions');
+  }
+
   console.log('✅ Tables ready');
 }
 
@@ -194,7 +220,8 @@ async function createSession(tableCode, pin, gameType, ruleType) {
     const session = {
       id: nextId('sessions'), table_code: tableCode, pin,
       game_type: gameType || 'singles', rule_type: ruleType || 'bar_rules',
-      status: 'active', created_at: new Date()
+      status: 'active', created_at: new Date(),
+      total_joins: 0, peak_queue: 0
     };
     mem.sessions.push(session);
     return session;
@@ -211,12 +238,63 @@ async function createSession(tableCode, pin, gameType, ruleType) {
   return res.rows[0];
 }
 
+// ============================================
+// Session stats snapshot — called before closing a session
+// ============================================
+
+async function snapshotStats(session) {
+  if (!session) return;
+  const sid = session.id;
+
+  if (useMemory) {
+    const games = mem.game_log.filter(g => g.session_id === sid);
+    const allEntries = mem.queue_entries.filter(e => e.session_id === sid);
+    const uniquePhones = new Set(allEntries.filter(e => e.phone_id).map(e => e.phone_id));
+    const avgGames = games.filter(g => g.counted_for_avg && g.duration_seconds >= 90);
+    const avgSec = avgGames.length > 0
+      ? Math.round(avgGames.reduce((s, g) => s + g.duration_seconds, 0) / avgGames.length)
+      : null;
+
+    mem.session_stats.push({
+      id: nextId('session_stats'),
+      table_code: session.table_code,
+      session_id: sid,
+      opened_at: session.created_at,
+      closed_at: new Date(),
+      total_joins: session.total_joins || allEntries.length,
+      total_games: games.length,
+      peak_queue: session.peak_queue || 0,
+      unique_players: uniquePhones.size || allEntries.length,
+      avg_game_seconds: avgSec,
+      created_at: new Date()
+    });
+    return;
+  }
+
+  await pool.query(
+    `INSERT INTO session_stats (table_code, session_id, opened_at, closed_at,
+       total_joins, total_games, peak_queue, unique_players, avg_game_seconds)
+     VALUES ($1, $2, $3, NOW(),
+       COALESCE($4, 0),
+       (SELECT COUNT(*) FROM game_log WHERE session_id = $2),
+       COALESCE($5, 0),
+       (SELECT COUNT(DISTINCT phone_id) FROM queue_entries WHERE session_id = $2 AND phone_id IS NOT NULL),
+       (SELECT ROUND(AVG(duration_seconds)) FROM (
+         SELECT duration_seconds FROM game_log
+         WHERE session_id = $2 AND counted_for_avg = true AND duration_seconds >= 90
+         ORDER BY ended_at DESC LIMIT 5
+       ) sub)
+     )`,
+    [session.table_code, sid, session.created_at, session.total_joins, session.peak_queue]
+  );
+}
+
 async function closeSession(tableCode) {
   if (useMemory) {
     const s = mem.sessions.find(s => s.table_code === tableCode && s.status === 'active');
-    if (s) s.status = 'closed';
-    // Clear queue entries and game log for this session
     if (s) {
+      await snapshotStats(s);
+      s.status = 'closed';
       mem.queue_entries = mem.queue_entries.filter(e => e.session_id !== s.id);
       mem.game_log = mem.game_log.filter(g => g.session_id !== s.id);
     }
@@ -224,6 +302,7 @@ async function closeSession(tableCode) {
   }
   const session = await getSession(tableCode);
   if (!session) return null;
+  await snapshotStats(session);
   await pool.query('DELETE FROM game_log WHERE session_id = $1', [session.id]);
   await pool.query('DELETE FROM queue_entries WHERE session_id = $1', [session.id]);
   await pool.query('UPDATE sessions SET status = $1 WHERE id = $2', ['closed', session.id]);
@@ -293,6 +372,13 @@ async function addToQueue(sessionId, playerName, partnerName, phoneId) {
       joined_at: new Date(), removed_at: null
     };
     mem.queue_entries.push(entry);
+    // Track stats on session
+    const sess = mem.sessions.find(s => s.id === sessionId);
+    if (sess) {
+      sess.total_joins = (sess.total_joins || 0) + 1;
+      const currentSize = mem.queue_entries.filter(e => e.session_id === sessionId && !['eliminated','removed'].includes(e.status)).length;
+      if (currentSize > (sess.peak_queue || 0)) sess.peak_queue = currentSize;
+    }
     return entry;
   }
 
@@ -300,6 +386,14 @@ async function addToQueue(sessionId, playerName, partnerName, phoneId) {
     `INSERT INTO queue_entries (session_id, player_name, partner_name, position, phone_id)
      VALUES ($1, $2, $3, $4, $5) RETURNING *`,
     [sessionId, playerName, partnerName || null, nextPos, phoneId || null]
+  );
+  // Track stats on session
+  await pool.query(
+    `UPDATE sessions SET total_joins = COALESCE(total_joins, 0) + 1,
+     peak_queue = GREATEST(COALESCE(peak_queue, 0),
+       (SELECT COUNT(*) FROM queue_entries WHERE session_id = $1 AND status NOT IN ('eliminated','removed')))
+     WHERE id = $1`,
+    [sessionId]
   );
   return res.rows[0];
 }
@@ -1138,7 +1232,7 @@ async function getImpressionReport() {
         const bar = mem.bars.find(b => b.id === imp.bar_id);
         report[key] = {
           ad_id: imp.ad_id, advertiser_name: ad?.advertiser_name || 'Unknown',
-          bar_id: imp.bar_id, bar_name: bar?.name || 'Unknown',
+          bar_id: imp.bar_id, bar_name: bar?.name || 'Unknown', bar_slug: bar?.slug || '',
           total: 0, today: 0, this_week: 0, this_month: 0
         };
       }
@@ -1148,18 +1242,27 @@ async function getImpressionReport() {
       if (age < 604800000) report[key].this_week++;
       if (age < 2592000000) report[key].this_month++;
     }
-    return Object.values(report);
+    // Enrich with bar context from session_stats
+    const result = Object.values(report);
+    for (const r of result) {
+      const barStats = mem.session_stats.filter(s => s.table_code === r.bar_slug || s.table_code?.startsWith(r.bar_slug));
+      r.bar_total_games = barStats.reduce((sum, s) => sum + (s.total_games || 0), 0);
+      r.bar_total_players = barStats.reduce((sum, s) => sum + (s.unique_players || 0), 0);
+    }
+    return result;
   }
   const res = await pool.query(`
-    SELECT a.id as ad_id, a.advertiser_name, b.id as bar_id, b.name as bar_name,
+    SELECT a.id as ad_id, a.advertiser_name, b.id as bar_id, b.name as bar_name, b.slug as bar_slug,
       COUNT(*) as total,
       COUNT(*) FILTER (WHERE i.shown_at > NOW() - INTERVAL '1 day') as today,
       COUNT(*) FILTER (WHERE i.shown_at > NOW() - INTERVAL '7 days') as this_week,
-      COUNT(*) FILTER (WHERE i.shown_at > NOW() - INTERVAL '30 days') as this_month
+      COUNT(*) FILTER (WHERE i.shown_at > NOW() - INTERVAL '30 days') as this_month,
+      (SELECT COALESCE(SUM(total_games), 0) FROM session_stats WHERE table_code = b.slug OR table_code LIKE b.slug || '-%') as bar_total_games,
+      (SELECT COALESCE(SUM(unique_players), 0) FROM session_stats WHERE table_code = b.slug OR table_code LIKE b.slug || '-%') as bar_total_players
     FROM ad_impressions i
     JOIN ads a ON a.id = i.ad_id
     JOIN bars b ON b.id = i.bar_id
-    GROUP BY a.id, a.advertiser_name, b.id, b.name
+    GROUP BY a.id, a.advertiser_name, b.id, b.name, b.slug
     ORDER BY this_week DESC
   `);
   return res.rows;
@@ -1173,6 +1276,7 @@ async function closeAllSessions() {
   if (useMemory) {
     const active = mem.sessions.filter(s => s.status === 'active');
     for (const s of active) {
+      await snapshotStats(s);
       s.status = 'closed';
       mem.queue_entries = mem.queue_entries.filter(e => e.session_id !== s.id);
       mem.game_log = mem.game_log.filter(g => g.session_id !== s.id);
@@ -1180,8 +1284,9 @@ async function closeAllSessions() {
     return active.length;
   }
   // Get all active sessions
-  const res = await pool.query("SELECT id FROM sessions WHERE status = 'active'");
+  const res = await pool.query("SELECT * FROM sessions WHERE status = 'active'");
   for (const row of res.rows) {
+    await snapshotStats(row);
     await pool.query('DELETE FROM game_log WHERE session_id = $1', [row.id]);
     await pool.query('DELETE FROM queue_entries WHERE session_id = $1', [row.id]);
   }
@@ -1307,6 +1412,46 @@ setInterval(() => {
 // Exports
 // ============================================
 
+// ============================================
+// Session stats retrieval
+// ============================================
+
+async function getSessionStats(tableCode, limit = 30) {
+  if (useMemory) {
+    let stats = [...mem.session_stats];
+    if (tableCode) stats = stats.filter(s => s.table_code === tableCode);
+    return stats.sort((a, b) => new Date(b.closed_at) - new Date(a.closed_at)).slice(0, limit);
+  }
+  const q = tableCode
+    ? await pool.query('SELECT * FROM session_stats WHERE table_code = $1 ORDER BY closed_at DESC LIMIT $2', [tableCode, limit])
+    : await pool.query('SELECT * FROM session_stats ORDER BY closed_at DESC LIMIT $1', [limit]);
+  return q.rows;
+}
+
+async function getAllStats() {
+  // Aggregate stats across all sessions — for admin dashboard
+  if (useMemory) {
+    const stats = mem.session_stats;
+    if (stats.length === 0) return { sessions: 0, total_joins: 0, total_games: 0, avg_peak_queue: 0, recent: [] };
+    return {
+      sessions: stats.length,
+      total_joins: stats.reduce((s, r) => s + (r.total_joins || 0), 0),
+      total_games: stats.reduce((s, r) => s + (r.total_games || 0), 0),
+      avg_peak_queue: Math.round(stats.reduce((s, r) => s + (r.peak_queue || 0), 0) / stats.length),
+      recent: [...stats].sort((a, b) => new Date(b.closed_at) - new Date(a.closed_at)).slice(0, 30)
+    };
+  }
+  const agg = await pool.query(`
+    SELECT COUNT(*) as sessions,
+           COALESCE(SUM(total_joins), 0) as total_joins,
+           COALESCE(SUM(total_games), 0) as total_games,
+           ROUND(AVG(peak_queue)) as avg_peak_queue
+    FROM session_stats
+  `);
+  const recent = await pool.query('SELECT * FROM session_stats ORDER BY closed_at DESC LIMIT 30');
+  return { ...agg.rows[0], recent: recent.rows };
+}
+
 module.exports = {
   init,
   getSession,
@@ -1340,6 +1485,8 @@ module.exports = {
   closeAllSessions,
   // Bar-session link
   getBarForTableCode,
+  // Stats
+  getSessionStats, getAllStats,
   _resetMemory() {
     mem.sessions = [];
     mem.queue_entries = [];
@@ -1348,7 +1495,8 @@ module.exports = {
     mem.ads = [];
     mem.ad_bar_targets = [];
     mem.ad_impressions = [];
-    mem._idCounters = { sessions: 0, queue_entries: 0, game_log: 0, bars: 0, ads: 0, ad_bar_targets: 0, ad_impressions: 0 };
+    mem.session_stats = [];
+    mem._idCounters = { sessions: 0, queue_entries: 0, game_log: 0, bars: 0, ads: 0, ad_bar_targets: 0, ad_impressions: 0, session_stats: 0 };
   },
   _getMemory() { return mem; },
   _getMemEntry(id) { return mem.queue_entries.find(e => e.id === id); }

@@ -98,6 +98,7 @@
     <button class="tab active" data-tab="bars" onclick="switchTab('bars')">Bars</button>
     <button class="tab" data-tab="ads" onclick="switchTab('ads')">Ads</button>
     <button class="tab" data-tab="reports" onclick="switchTab('reports')">Reports</button>
+    <button class="tab" data-tab="stats" onclick="switchTab('stats')">Stats</button>
   </div>
 
   <!-- BARS PANEL -->
@@ -152,6 +153,18 @@
     <div id="reportsList"></div>
     <div id="reportsEmpty" style="color:var(--muted);text-align:center;padding:40px;display:none;">
       No impression data yet. Ads need to be running on boards to collect data.
+    </div>
+  </div>
+
+  <div class="panel" id="panel-stats">
+    <div class="section-title">Session History</div>
+    <div id="statsOverview" style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:20px;"></div>
+    <table>
+      <thead><tr><th>Table</th><th>Date</th><th>Duration</th><th>Players</th><th>Games</th><th>Peak Queue</th><th>Avg Game</th></tr></thead>
+      <tbody id="statsTable"></tbody>
+    </table>
+    <div id="statsEmpty" style="color:var(--muted);text-align:center;padding:40px;display:none;">
+      No session data yet. Stats are recorded when sessions close.
     </div>
   </div>
 
@@ -213,6 +226,7 @@ function switchTab(name) {
   document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === 'panel-' + name));
   if (name === 'ads') loadAds();
   if (name === 'reports') loadReports();
+  if (name === 'stats') loadStats();
 }
 
 // ============================================
@@ -392,11 +406,64 @@ async function loadReports() {
         <div class="report-num"><div class="val">${num(r.this_month)}</div><div class="lbl">This Month</div></div>
         <div class="report-num"><div class="val">${num(r.total)}</div><div class="lbl">All Time</div></div>
       </div>
+      ${r.bar_total_games || r.bar_total_players ? `<div class="report-nums" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);">
+        <div class="report-num"><div class="val">${num(r.bar_total_games)}</div><div class="lbl">Games at Bar</div></div>
+        <div class="report-num"><div class="val">${num(r.bar_total_players)}</div><div class="lbl">Players Reached</div></div>
+      </div>` : ''}
     </div>
   `).join('');
 }
 
 function num(n) { return (parseInt(n) || 0).toLocaleString(); }
+
+async function loadStats() {
+  const data = await apiFetch('/api/admin/stats');
+  const overview = document.getElementById('statsOverview');
+  const tbody = document.getElementById('statsTable');
+  const empty = document.getElementById('statsEmpty');
+  const recent = data.recent || [];
+
+  if (recent.length === 0) {
+    overview.innerHTML = '';
+    tbody.innerHTML = '';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+
+  overview.innerHTML = `
+    <div class="report-card" style="flex:1;min-width:120px;">
+      <div class="report-nums">
+        <div class="report-num"><div class="val">${num(data.sessions)}</div><div class="lbl">Sessions</div></div>
+        <div class="report-num"><div class="val">${num(data.total_games)}</div><div class="lbl">Games</div></div>
+        <div class="report-num"><div class="val">${num(data.total_joins)}</div><div class="lbl">Joins</div></div>
+        <div class="report-num"><div class="val">${num(data.avg_peak_queue)}</div><div class="lbl">Avg Peak</div></div>
+      </div>
+    </div>
+  `;
+
+  tbody.innerHTML = recent.map(r => {
+    const opened = r.opened_at ? new Date(r.opened_at) : null;
+    const closed = r.closed_at ? new Date(r.closed_at) : null;
+    const dateStr = closed ? closed.toLocaleDateString('en-US', {month:'short', day:'numeric'}) : '—';
+    const timeStr = opened ? opened.toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'}) : '';
+    let dur = '—';
+    if (opened && closed) {
+      const mins = Math.round((closed - opened) / 60000);
+      dur = mins > 60 ? `${Math.floor(mins/60)}h ${mins%60}m` : `${mins}m`;
+    }
+    const avgGame = r.avg_game_seconds ? `${Math.round(r.avg_game_seconds / 60)}m` : '—';
+    return `<tr>
+      <td><code style="color:var(--accent)">${esc(r.table_code)}</code></td>
+      <td>${dateStr} <span style="color:var(--dim)">${timeStr}</span></td>
+      <td>${dur}</td>
+      <td>${r.unique_players || r.total_joins || 0}</td>
+      <td>${r.total_games || 0}</td>
+      <td>${r.peak_queue || 0}</td>
+      <td>${avgGame}</td>
+    </tr>`;
+  }).join('');
+}
 
 // ============================================
 // Util

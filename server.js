@@ -571,6 +571,21 @@ app.get('/api/admin/impressions', adminAuth, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: 'server_error' }); }
 });
 
+// --- Session stats ---
+app.get('/api/admin/stats', adminAuth, async (req, res) => {
+  try {
+    const stats = await db.getAllStats();
+    res.json(stats);
+  } catch (err) { console.error(err); res.status(500).json({ error: 'server_error' }); }
+});
+
+app.get('/api/admin/stats/:tableCode', adminAuth, async (req, res) => {
+  try {
+    const stats = await db.getSessionStats(req.params.tableCode);
+    res.json({ stats });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'server_error' }); }
+});
+
 // ============================================
 // Ad serving (public — called by board)
 // ============================================
