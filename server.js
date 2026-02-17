@@ -664,6 +664,48 @@ setInterval(async () => {
 }, 10000);
 
 // ============================================
+// Daily reset — 8:00 AM Eastern Time, every day
+// Closes all active sessions (wipes queues + game logs)
+// ============================================
+
+let lastResetDate = null; // tracks which date we last reset on
+
+function checkDailyReset() {
+  // Get current time in New York
+  const now = new Date();
+  const nyTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  const hour = nyTime.getHours();
+  const dateStr = nyTime.toISOString().slice(0, 10); // YYYY-MM-DD
+
+  // Fire once per day, at or after 8:00 AM ET
+  if (hour >= 8 && lastResetDate !== dateStr) {
+    lastResetDate = dateStr;
+    performDailyReset(dateStr);
+  }
+}
+
+async function performDailyReset(dateStr) {
+  try {
+    const count = await db.closeAllSessions();
+    console.log(`🔄 Daily reset (${dateStr} 8am ET): closed ${count} active session(s)`);
+
+    // Notify all connected boards to show welcome screen
+    for (const [ws, info] of clients) {
+      if (ws.readyState === 1) {
+        ws.send(JSON.stringify({ type: 'session_closed' }));
+      }
+    }
+  } catch (err) {
+    console.error('Daily reset error:', err);
+  }
+}
+
+// Check every 60 seconds
+setInterval(checkDailyReset, 60000);
+// Also check on startup (in case server restarts after 8am)
+setTimeout(checkDailyReset, 5000);
+
+// ============================================
 // Health check + startup
 // ============================================
 

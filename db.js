@@ -1153,6 +1153,32 @@ async function getImpressionReport() {
 }
 
 // ============================================
+// Daily reset — close all active sessions (wipes queues + game logs)
+// ============================================
+
+async function closeAllSessions() {
+  if (useMemory) {
+    const active = mem.sessions.filter(s => s.status === 'active');
+    for (const s of active) {
+      s.status = 'closed';
+      mem.queue_entries = mem.queue_entries.filter(e => e.session_id !== s.id);
+      mem.game_log = mem.game_log.filter(g => g.session_id !== s.id);
+    }
+    return active.length;
+  }
+  // Get all active sessions
+  const res = await pool.query("SELECT id FROM sessions WHERE status = 'active'");
+  for (const row of res.rows) {
+    await pool.query('DELETE FROM game_log WHERE session_id = $1', [row.id]);
+    await pool.query('DELETE FROM queue_entries WHERE session_id = $1', [row.id]);
+  }
+  const updated = await pool.query(
+    "UPDATE sessions SET status = 'closed' WHERE status = 'active' RETURNING id"
+  );
+  return updated.rowCount;
+}
+
+// ============================================
 // Link bars to sessions
 // ============================================
 
@@ -1297,6 +1323,8 @@ module.exports = {
   setAdTargets, getAdTargets, getAdsForBar,
   // Ad impressions
   logImpression, getImpressionReport,
+  // Daily reset
+  closeAllSessions,
   // Bar-session link
   getBarForTableCode,
   _resetMemory() {
