@@ -216,7 +216,6 @@
         .footer-btn:hover { border-color: #fff; color: #fff; }
         .footer-btn.disabled { opacity: 0.3; cursor: default; }
         .undo-btn { left: 12px; }
-        .fullscreen-btn { right: 12px; }
 
         /* Confirm Dialog */
         .confirm-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.9); z-index: 100; justify-content: center; align-items: center; }
@@ -402,6 +401,34 @@
             background: rgba(0,0,0,0.7); padding: 3px 8px;
             border-radius: 4px; z-index: 99; display: none;
         }
+
+        /* PIN keypad overlay */
+        .pin-overlay {
+            display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.95); z-index: 200;
+            justify-content: center; align-items: center; flex-direction: column;
+        }
+        .pin-overlay.show { display: flex; }
+        .pin-dots {
+            display: flex; gap: 12px; margin-bottom: 24px;
+        }
+        .pin-dot {
+            width: 14px; height: 14px; border-radius: 50%;
+            border: 2px solid #555; background: transparent;
+        }
+        .pin-dot.filled { background: #f5c518; border-color: #f5c518; }
+        .pin-dot.wrong { background: #ef4444; border-color: #ef4444; }
+        .pin-grid {
+            display: grid; grid-template-columns: repeat(3, 70px); gap: 10px;
+        }
+        .pin-key {
+            height: 56px; border-radius: 10px; border: 1px solid #333;
+            background: #1a1a1a; color: #fff; font-size: 1.3rem;
+            font-weight: 600; cursor: pointer; font-family: inherit;
+        }
+        .pin-key:active { background: #333; }
+        .pin-cancel { grid-column: 1; color: #888; font-size: 0.8rem; }
+        .pin-del { color: #ef4444; font-size: 0.8rem; }
         /* Adjust welcome padding when ads are framing it */
         .welcome-screen.has-ad {
             padding-top: 260px !important;
@@ -420,6 +447,23 @@
 </head>
 <body>
     <div class="conn-status" id="connStatus">⚠ Reconnecting...</div>
+    <div class="pin-overlay" id="pinOverlay">
+        <div class="pin-dots" id="pinDots"></div>
+        <div class="pin-grid">
+            <button class="pin-key" onclick="pinKey('1')">1</button>
+            <button class="pin-key" onclick="pinKey('2')">2</button>
+            <button class="pin-key" onclick="pinKey('3')">3</button>
+            <button class="pin-key" onclick="pinKey('4')">4</button>
+            <button class="pin-key" onclick="pinKey('5')">5</button>
+            <button class="pin-key" onclick="pinKey('6')">6</button>
+            <button class="pin-key" onclick="pinKey('7')">7</button>
+            <button class="pin-key" onclick="pinKey('8')">8</button>
+            <button class="pin-key" onclick="pinKey('9')">9</button>
+            <button class="pin-key pin-cancel" onclick="pinCancel()">Cancel</button>
+            <button class="pin-key" onclick="pinKey('0')">0</button>
+            <button class="pin-key pin-del" onclick="pinDel()">⌫</button>
+        </div>
+    </div>
     <div class="frame">
     <div class="board">
         <div id="board-content">
@@ -581,7 +625,6 @@
         <div class="footer">
             <button class="footer-btn undo-btn" id="undoBtn" onclick="doUndo()">↩ Undo</button>
             <span class="footer-brand">Pool Cue<span class="footer-updated" id="lastUpdated"></span></span>
-            <button class="footer-btn fullscreen-btn" id="fsBtn" onclick="toggleFullscreen()">⛶ Fullscreen</button>
         </div>
     </div>
     </div>
@@ -622,6 +665,14 @@
     let session = null;
     let avgGameSeconds = null;
     let pendingAction = null;
+    let confirmAutoTimer = null;
+
+    function showConfirmOverlay(msg) {
+        document.getElementById('confirmMessage').textContent = msg;
+        document.getElementById('confirmOverlay').classList.add('show');
+        clearTimeout(confirmAutoTimer);
+        confirmAutoTimer = setTimeout(() => hideConfirm(), 15000);
+    }
     let lastKingName = '';
 
     // Idle detection — revert to welcome screen
@@ -1143,8 +1194,7 @@
             currentEl.style.opacity = '0';
 
             // Show confirm
-            document.getElementById('confirmMessage').textContent = `Remove ${loserName}?`;
-            document.getElementById('confirmOverlay').classList.add('show');
+            showConfirmOverlay(`Remove ${loserName}?`);
         } else {
             // Snap back
             currentEl.style.transform = '';
@@ -1154,6 +1204,7 @@
     }
 
     function hideConfirm() {
+        clearTimeout(confirmAutoTimer);
         document.getElementById('confirmOverlay').classList.remove('show');
         pendingAction = null;
         currentEl = null;
@@ -1173,6 +1224,7 @@
     }
 
     async function executeConfirm() {
+        clearTimeout(confirmAutoTimer);
         document.getElementById('confirmOverlay').classList.remove('show');
         if (!pendingAction) return;
 
@@ -1237,8 +1289,7 @@
 
     function doUndo() {
         pendingAction = { type: 'undo' };
-        document.getElementById('confirmMessage').textContent = 'Undo last removal?';
-        document.getElementById('confirmOverlay').classList.add('show');
+        showConfirmOverlay('Undo last removal?');
     }
 
     // Kiosk mode: show overlay if ?kiosk in URL
@@ -1399,20 +1450,6 @@
       }
     });
 
-    // Fullscreen toggle
-    function toggleFullscreen() {
-      if (!document.fullscreenElement) {
-        document.documentElement.requestFullscreen().catch(() => {});
-        document.getElementById('fsBtn').textContent = '✕ Exit';
-      } else {
-        document.exitFullscreen();
-        document.getElementById('fsBtn').textContent = '⛶ Fullscreen';
-      }
-    }
-    document.addEventListener('fullscreenchange', () => {
-      document.getElementById('fsBtn').textContent = document.fullscreenElement ? '✕ Exit' : '⛶ Fullscreen';
-    });
-
     // Attach swipe to king + challenger sections in the header (both are static .swipeable elements)
     attachSwipeHandlers();
 
@@ -1427,7 +1464,7 @@
       clearTimeout(cornerTimer);
       if (cornerTaps >= 5) {
         cornerTaps = 0;
-        if (confirm('Exit kiosk mode?')) window.close();
+        openPin('exit');
       }
       cornerTimer = setTimeout(() => { cornerTaps = 0; }, 2000);
     });
@@ -1440,11 +1477,68 @@
       clearTimeout(debugTimer);
       if (debugTaps >= 5) {
         debugTaps = 0;
-        const panel = document.getElementById('debugPanel');
-        panel.classList.toggle('show');
+        openPin('debug');
       }
       debugTimer = setTimeout(() => { debugTaps = 0; }, 2000);
     });
+
+    // PIN keypad system
+    const PIN_CODE = '134679';
+    let pinEntry = '';
+    let pinAction = null;
+
+    function openPin(action) {
+        pinAction = action;
+        pinEntry = '';
+        renderPinDots();
+        document.getElementById('pinOverlay').classList.add('show');
+    }
+
+    function pinCancel() {
+        document.getElementById('pinOverlay').classList.remove('show');
+        pinEntry = '';
+        pinAction = null;
+    }
+
+    function pinKey(digit) {
+        if (pinEntry.length >= PIN_CODE.length) return;
+        pinEntry += digit;
+        renderPinDots();
+        if (pinEntry.length === PIN_CODE.length) {
+            if (pinEntry === PIN_CODE) {
+                document.getElementById('pinOverlay').classList.remove('show');
+                if (pinAction === 'exit') {
+                    document.exitFullscreen?.().catch(() => {});
+                    window.close();
+                    // Fallback if window.close blocked
+                    window.location.href = 'about:blank';
+                } else if (pinAction === 'debug') {
+                    document.getElementById('debugPanel').classList.toggle('show');
+                }
+                pinEntry = '';
+                pinAction = null;
+            } else {
+                // Wrong PIN — flash red, reset
+                document.querySelectorAll('.pin-dot').forEach(d => d.classList.add('wrong'));
+                setTimeout(() => { pinEntry = ''; renderPinDots(); }, 500);
+            }
+        }
+    }
+
+    function pinDel() {
+        pinEntry = pinEntry.slice(0, -1);
+        renderPinDots();
+    }
+
+    function renderPinDots() {
+        const container = document.getElementById('pinDots');
+        container.innerHTML = '';
+        for (let i = 0; i < PIN_CODE.length; i++) {
+            const dot = document.createElement('div');
+            dot.className = 'pin-dot' + (i < pinEntry.length ? ' filled' : '');
+            container.appendChild(dot);
+        }
+    }
 
     async function debugAddPlayer() {
       try {

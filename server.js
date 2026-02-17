@@ -21,7 +21,7 @@ const wss = new WebSocketServer({ server });
 
 const PORT = process.env.PORT || 3000;
 const BASE_URL = process.env.BASE_URL || `http://localhost:${PORT}`;
-const SESSION_PIN = process.env.SESSION_PIN || '0000';
+const SESSION_PIN = process.env.SESSION_PIN || '134679';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'poolcue2026';
 
 // Simple rate limiter (in-memory)

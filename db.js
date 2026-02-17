@@ -627,6 +627,19 @@ async function undoLastRemoval(sessionId) {
     await pool.query('DELETE FROM game_log WHERE id = $1', [lastLog.id]);
   }
 
+  // 7. Clear snapshot from the now-last game log entry to prevent chained undos.
+  //    Only the most recent game should be undoable.
+  if (useMemory) {
+    const prevLog = [...mem.game_log].filter(g => g.session_id === sessionId).pop();
+    if (prevLog) prevLog.queue_snapshot = null;
+  } else {
+    await pool.query(
+      `UPDATE game_log SET queue_snapshot = NULL
+       WHERE id = (SELECT id FROM game_log WHERE session_id = $1 ORDER BY ended_at DESC LIMIT 1)`,
+      [sessionId]
+    );
+  }
+
   return { success: true, restored: lastLog.loser_name };
 }
 
@@ -868,7 +881,7 @@ async function updatePartnerName(sessionId, phoneId, partnerName) {
 async function ensureSession(tableCode, pin) {
   let session = await getSession(tableCode);
   if (!session) {
-    session = await createSession(tableCode, pin || process.env.SESSION_PIN || '0000', 'singles', 'bar_rules');
+    session = await createSession(tableCode, pin || process.env.SESSION_PIN || '134679', 'singles', 'bar_rules');
   }
   return session;
 }

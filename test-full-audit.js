@@ -613,7 +613,7 @@ async function run() {
   assert(qB.length === 2, 'Alice joins session B too');
 
   // =========================================================
-  section('EDGE: MULTIPLE UNDOS (ONLY LAST WORKS)');
+  section('EDGE: SINGLE UNDO ONLY (NO CHAIN)');
   // =========================================================
   reset();
   const s17 = await db.createSession('t17', '0', 'singles', 'bar_rules');
@@ -628,10 +628,10 @@ async function run() {
   assert(undo17.restored === 'C', 'First undo restores C');
   
   const undo17b = await db.undoLastRemoval(s17.id);
-  assert(undo17b.restored === 'B', 'Second undo restores B');
+  assert(undo17b.error === 'nothing_to_undo', 'Second undo blocked (single undo only)');
   
   let q17 = await db.getQueue(s17.id);
-  assert(q17.length === 3, 'All 3 restored after 2 undos');
+  assert(q17.length === 2, 'Only C restored, B stays eliminated');
 
   // =========================================================
   section('EDGE: DOUBLES / PARTNER WORKFLOW');
