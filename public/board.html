@@ -1082,18 +1082,29 @@
 
         if (Math.abs(diffX) > THRESHOLD) {
             const role = currentEl.dataset.role;
-            // Swiping king off = challenger wins, swiping challenger off = king wins
-            const result = role === 'challenger' ? 'king-wins' : 'challenger-wins';
-            const loserName = role === 'challenger'
-                ? (queue.find(e => e.position === 2)?.player_name || '?')
-                : (queue.find(e => e.position === 1)?.player_name || '?');
+            const king = queue.find(e => e.position === 1);
+            const challenger = queue.find(e => e.position === 2);
+
+            let loserName;
+
+            if (role === 'king' && !challenger) {
+                // Only player on the board — use direct removal
+                loserName = king?.player_name || '?';
+                pendingAction = { type: 'remove', entryId: king?.id };
+            } else {
+                // Normal game result
+                const result = role === 'challenger' ? 'king-wins' : 'challenger-wins';
+                loserName = role === 'challenger'
+                    ? (challenger?.player_name || '?')
+                    : (king?.player_name || '?');
+                pendingAction = { type: 'result', result };
+            }
 
             // Animate off screen
             currentEl.style.transform = `translateX(${diffX < 0 ? '-100vw' : '100vw'})`;
             currentEl.style.opacity = '0';
 
             // Show confirm
-            pendingAction = { type: 'result', result };
             document.getElementById('confirmMessage').textContent = `Remove ${loserName}?`;
             document.getElementById('confirmOverlay').classList.add('show');
         } else {
@@ -1152,6 +1163,16 @@
                 });
             } catch (err) {
                 console.error('Result API error:', err);
+            }
+        } else if (action.type === 'remove') {
+            try {
+                await fetch('/api/remove', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tableCode: TABLE_CODE, entryId: action.entryId, source: 'board' })
+                });
+            } catch (err) {
+                console.error('Remove API error:', err);
             }
         } else if (action.type === 'undo') {
             try {

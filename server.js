@@ -385,8 +385,9 @@ app.post('/api/rules', async (req, res) => {
 // Remove any player (bartender tool — PIN required)
 app.post('/api/remove', async (req, res) => {
   try {
-    const { tableCode, pin, entryId } = req.body;
-    if (pin !== SESSION_PIN) return res.status(403).json({ error: 'bad_pin' });
+    const { tableCode, pin, entryId, source } = req.body;
+    // Board-initiated removals (touchscreen at the table) skip PIN check
+    if (source !== 'board' && pin !== SESSION_PIN) return res.status(403).json({ error: 'bad_pin' });
     const session = await db.getSession(tableCode);
     if (!session) return res.status(404).json({ error: 'no_session' });
     const result = await db.removePlayer(session.id, entryId);
