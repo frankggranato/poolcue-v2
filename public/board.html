@@ -195,6 +195,11 @@
         .footer-brand {
             font-size: 0.6rem; color: #333;
             text-transform: uppercase; letter-spacing: 2px; font-weight: 600;
+            display: flex; flex-direction: column; align-items: center; gap: 1px;
+        }
+        .footer-updated {
+            font-size: 0.45rem; color: #2a2a2a; letter-spacing: 1px;
+            font-weight: 400; text-transform: none;
         }
         .footer-btn {
             position: absolute; bottom: 12px;
@@ -575,7 +580,7 @@
 
         <div class="footer">
             <button class="footer-btn undo-btn" id="undoBtn" onclick="doUndo()">↩ Undo</button>
-            <span class="footer-brand">Pool Cue</span>
+            <span class="footer-brand">Pool Cue<span class="footer-updated" id="lastUpdated"></span></span>
             <button class="footer-btn fullscreen-btn" id="fsBtn" onclick="toggleFullscreen()">⛶ Fullscreen</button>
         </div>
     </div>
@@ -726,6 +731,18 @@
       return d.innerHTML;
     }
 
+    // Last updated tracker
+    let lastDataTime = Date.now();
+    function touchLastUpdated() { lastDataTime = Date.now(); }
+    setInterval(() => {
+        const el = document.getElementById('lastUpdated');
+        if (!el) return;
+        const sec = Math.floor((Date.now() - lastDataTime) / 1000);
+        if (sec < 5) el.textContent = 'Live';
+        else if (sec < 60) el.textContent = `Updated ${sec}s ago`;
+        else el.textContent = `Updated ${Math.floor(sec / 60)}m ago`;
+    }, 3000);
+
     // QR code
     document.getElementById('qrImg').src = `/qr/${TABLE_CODE}`;
     document.getElementById('welcomeQrImg').src = `/qr/${TABLE_CODE}`;
@@ -741,6 +758,7 @@
             let data;
             try { data = JSON.parse(e.data); } catch { return; }
             if (data.type === 'queue_update') {
+                touchLastUpdated();
                 const oldLen = queue.length;
                 queue = data.queue;
                 session = data.session;
@@ -774,6 +792,7 @@
                 queue = data.queue || [];
                 session = data.session;
                 avgGameSeconds = data.avg_game_seconds;
+                touchLastUpdated();
                 checkIdleRevert();
                 render();
             }).catch(() => {});
@@ -1307,8 +1326,15 @@
         logImpression(ad.id);
     }
 
+    const impressionThrottle = new Map(); // adId → last logged timestamp
+    const IMPRESSION_INTERVAL = 5 * 60 * 1000; // 5 minutes per ad
+
     function logImpression(adId) {
         if (!adBarId) return;
+        const now = Date.now();
+        const last = impressionThrottle.get(adId) || 0;
+        if (now - last < IMPRESSION_INTERVAL) return; // throttled
+        impressionThrottle.set(adId, now);
         fetch('/api/ads/impression', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
