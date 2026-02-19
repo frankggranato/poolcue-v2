@@ -107,6 +107,22 @@
         .neon-group { animation: neonFlicker 6s ease-in-out infinite; }
 
         /* Main Content - Natural column flow: top-to-bottom, then next column */
+        .board-tips {
+            display: none;
+            padding: 8px 16px;
+            gap: 16px;
+            justify-content: center;
+            flex-shrink: 0;
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+        }
+        .board-tips.active { display: flex; }
+        .tip {
+            display: flex; align-items: center; gap: 6px;
+            font-size: 0.6rem; color: #555; letter-spacing: 0.3px;
+        }
+        .tip-icon {
+            font-size: 0.7rem; flex-shrink: 0;
+        }
         .main {
             display: flex;
             flex-direction: column;
@@ -539,6 +555,13 @@
             </div> <!-- /header-top -->
             </div> <!-- /header -->
 
+            <!-- Board tips -->
+            <div class="board-tips" id="boardTips">
+                <div class="tip"><span class="tip-icon">👈</span> Swipe loser off the list</div>
+                <div class="tip"><span class="tip-icon">↩</span> Mistake? Undo bottom left</div>
+                <div class="tip"><span class="tip-icon">📱</span> Confirm you're ready on your phone</div>
+            </div>
+
             <!-- Main queue area -->
             <div class="main" id="mainContent"></div>
 
@@ -882,12 +905,14 @@
         const stateWelcome = document.getElementById('stateWelcome');
         const headerEl = document.querySelector('.header');
         const footerEl = document.querySelector('.footer');
+        const tipsEl = document.getElementById('boardTips');
 
         // No session, closed, or idle timeout — show welcome splash with QR
         if (!session || session.status === 'closed' || forceWelcome) {
             headerEl.style.display = 'none';
             mainEl.style.display = 'none';
             footerEl.style.display = 'none';
+            tipsEl.classList.remove('active');
             stateEmpty.classList.remove('active');
             stateWelcome.classList.add('active');
             updateAdState(true);
@@ -900,6 +925,7 @@
             headerEl.style.display = 'flex';
             mainEl.style.display = 'none';
             footerEl.style.display = 'flex';
+            tipsEl.classList.remove('active');
             stateEmpty.classList.add('active');
             // Reset header to empty state
             document.getElementById('kingName').textContent = 'Table Open';
@@ -915,6 +941,7 @@
         headerEl.style.display = 'flex';
         mainEl.style.display = 'flex';
         footerEl.style.display = 'flex';
+        tipsEl.classList.add('active');
         updateAdState(false);
 
         // King (position 1)
