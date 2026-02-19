@@ -109,8 +109,8 @@
         /* Main Content - Natural column flow: top-to-bottom, then next column */
         .board-tips {
             display: none;
-            padding: 10px 16px;
-            gap: 4px;
+            padding: 12px 16px;
+            gap: 6px;
             flex-direction: column;
             align-items: center;
             flex-shrink: 0;
@@ -119,7 +119,7 @@
         .board-tips.active { display: flex; }
         .tip {
             display: flex; align-items: center; gap: 6px;
-            font-size: 0.6rem; color: #555; letter-spacing: 0.3px;
+            font-size: 0.75rem; color: #fff; letter-spacing: 0.3px;
         }
         .tip-icon {
             font-size: 0.7rem; flex-shrink: 0;
@@ -484,6 +484,13 @@
     <div class="frame">
     <div class="board">
         <div id="board-content">
+            <!-- Board tips -->
+            <div class="board-tips" id="boardTips">
+                <div class="tip"><span class="tip-icon">👈</span> Swipe loser off the list</div>
+                <div class="tip"><span class="tip-icon">↩</span> Mistake? Undo bottom left</div>
+                <div class="tip"><span class="tip-icon">📱</span> Confirm you're ready on your phone</div>
+            </div>
+
             <!-- Header: Now Playing zone -->
             <div class="header">
                 <div class="header-top">
@@ -555,13 +562,6 @@
                 </div>
             </div> <!-- /header-top -->
             </div> <!-- /header -->
-
-            <!-- Board tips -->
-            <div class="board-tips" id="boardTips">
-                <div class="tip"><span class="tip-icon">👈</span> Swipe loser off the list</div>
-                <div class="tip"><span class="tip-icon">↩</span> Mistake? Undo bottom left</div>
-                <div class="tip"><span class="tip-icon">📱</span> Confirm you're ready on your phone</div>
-            </div>
 
             <!-- Main queue area -->
             <div class="main" id="mainContent"></div>
