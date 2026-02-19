@@ -1339,6 +1339,7 @@
 
     let adList = [];       // ads available for this board
     let adBarId = null;    // bar ID for impression logging
+    let hasAds = false;    // true if real ads OR placeholders loaded
     let adIndex = 0;       // current ad in rotation
     let adBannerTimer = null;
     let adIdleTimer = null;
@@ -1351,8 +1352,31 @@
             adList = data.ads || [];
             adBarId = data.bar_id || null;
             adIndex = 0;
-            if (adList.length > 0) startAdRotation();
-        } catch (e) { /* ads failing should never break the board */ }
+            if (adList.length > 0) {
+                hasAds = true;
+                startAdRotation();
+            } else {
+                hasAds = true;
+                showPlaceholderAds();
+            }
+        } catch (e) {
+            hasAds = true;
+            showPlaceholderAds();
+        }
+    }
+
+    function showPlaceholderAds() {
+        // Static defaults when no real ads configured
+        document.getElementById('adBannerImg').src = '/ads/ad-banner-1080x90.png';
+        document.getElementById('adBanner').style.display = 'flex';
+        ['idleAdImg', 'idleAdTopImg'].forEach(id => {
+            const img = document.getElementById(id);
+            if (img) img.src = '/ads/ad-idle-1080x240.png';
+        });
+        ['idleAdLeftImg', 'idleAdRightImg'].forEach(id => {
+            const img = document.getElementById(id);
+            if (img) img.src = '/ads/ad-side-1080x120.png';
+        });
     }
 
     function startAdRotation() {
@@ -1430,7 +1454,7 @@
         const welcomeScreen = document.getElementById('stateWelcome');
         boardIsIdle = isIdle;
 
-        if (adList.length === 0) {
+        if (!hasAds) {
             banner.style.display = 'none';
             overlay.classList.remove('active');
             adTop.classList.remove('active');
