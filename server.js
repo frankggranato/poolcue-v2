@@ -166,6 +166,20 @@ app.get('/setup/:tableCode', (req, res) => {
   res.sendFile(__dirname + '/public/setup.html');
 });
 
+// QR code image — board fetches this to render the join QR
+app.get('/qr/:tableCode', async (req, res) => {
+  try {
+    const joinUrl = `${BASE_URL}/join/${req.params.tableCode}`;
+    const png = await QRCode.toBuffer(joinUrl, { width: 300, margin: 1 });
+    res.set('Content-Type', 'image/png');
+    res.set('Cache-Control', 'public, max-age=86400');
+    res.send(png);
+  } catch (err) {
+    console.error('GET /qr error:', err);
+    res.status(500).json({ error: 'qr_failed' });
+  }
+});
+
 // ============================================
 // API routes
 // ============================================
