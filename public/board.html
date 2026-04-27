@@ -68,10 +68,12 @@
             border-bottom: 1px solid rgba(255,255,255,0.06);
         }
         .header-top {
-            display: flex; justify-content: space-between; align-items: flex-start;
+            display: flex; justify-content: space-between; align-items: stretch;
+            gap: 12px;
+            padding-right: 170px; /* clear absolute QR section on the right */
         }
         .now-playing-col {
-            flex: 1; min-width: 0;
+            flex: 0 1 auto; min-width: 0;
             display: flex; flex-direction: column;
         }
         .shot-caller-section { margin-bottom: 2px; }
@@ -106,23 +108,25 @@
         }
         .neon-group { animation: neonFlicker 6s ease-in-out infinite; }
 
-        /* Main Content - Natural column flow: top-to-bottom, then next column */
+        /* Tips — sit inline in header-top between players and QR, vertically centered */
         .board-tips {
             display: none;
-            padding: 12px 16px;
-            gap: 6px;
+            padding: 0;
+            gap: 8px;
             flex-direction: column;
-            align-items: center;
-            flex-shrink: 0;
-            border-bottom: 1px solid rgba(255,255,255,0.04);
+            align-items: flex-start;
+            flex: 1 1 0;
+            min-width: 0;
+            align-self: center;
         }
         .board-tips.active { display: flex; }
         .tip {
             display: flex; align-items: center; gap: 6px;
-            font-size: 0.75rem; color: #fff; letter-spacing: 0.3px;
+            font-size: 0.8rem; color: #fff; letter-spacing: 0.3px;
+            white-space: nowrap;
         }
         .tip-icon {
-            font-size: 0.7rem; flex-shrink: 0;
+            font-size: 0.75rem; flex-shrink: 0;
         }
         .main {
             display: flex;
@@ -446,8 +450,9 @@
         .pin-key:active { background: #333; }
         .pin-cancel { grid-column: 1; color: #888; font-size: 0.8rem; }
         .pin-del { color: #ef4444; font-size: 0.8rem; }
-        /* Adjust welcome padding when ads are framing it */
-        .welcome-screen.has-ad {
+        /* Adjust welcome/empty padding when ads are framing it */
+        .welcome-screen.has-ad,
+        .state-screen.has-ad {
             padding-top: 260px !important;
             padding-bottom: 260px !important;
             padding-left: 130px !important;
@@ -513,6 +518,12 @@
                     </div>
                 </div>
                 </div> <!-- /now-playing-col -->
+                <!-- Board tips — inline in header row, between players and QR -->
+                <div class="board-tips" id="boardTips">
+                    <div class="tip"><span class="tip-icon">👈</span> Swipe loser off the list</div>
+                    <div class="tip"><span class="tip-icon">↩</span> Mistake? Undo bottom left</div>
+                    <div class="tip"><span class="tip-icon">📱</span> Confirm you're ready on your phone</div>
+                </div>
                 <div class="qr-section">
                     <div class="qr-box">
                         <img id="qrImg" src="" class="qr-code" alt="QR">
@@ -555,13 +566,6 @@
                 </div>
             </div> <!-- /header-top -->
             </div> <!-- /header -->
-
-            <!-- Board tips -->
-            <div class="board-tips" id="boardTips">
-                <div class="tip"><span class="tip-icon">👈</span> Swipe loser off the list</div>
-                <div class="tip"><span class="tip-icon">↩</span> Mistake? Undo bottom left</div>
-                <div class="tip"><span class="tip-icon">📱</span> Confirm you're ready on your phone</div>
-            </div>
 
             <!-- Main queue area -->
             <div class="main" id="mainContent"></div>
@@ -702,6 +706,7 @@
     // Idle detection — revert to welcome screen
     let lastQueueSnapshot = '';      // JSON string of queue for change detection
     let lastQueueChangeTime = Date.now();
+    let lastQueueLength = 0;         // tracks previous queue length (for transition detection)
     let lowPlayerSince = Date.now(); // when queue dropped to ≤1 player
     let forceWelcome = false;
     let canIdleRestore = false;
@@ -716,12 +721,20 @@
 
         // Check if queue changed
         const snap = JSON.stringify(queue.map(e => e.id + ':' + e.position));
+        const wasHighPlayer = (lastQueueLength || 0) >= 2;
+        const isLowPlayer = queue.length <= 1;
         if (snap !== lastQueueSnapshot) {
             lastQueueSnapshot = snap;
             lastQueueChangeTime = now;
-            if (queue.length >= 2) lowPlayerSince = now;
+            // Reset 10-min low-player timer when queue is busy (≥2)
+            // OR when queue just transitioned from busy to low (start counting from now)
+            if (queue.length >= 2 || (wasHighPlayer && isLowPlayer)) {
+                lowPlayerSince = now;
+            }
+            lastQueueLength = queue.length;
             return;
         }
+        lastQueueLength = queue.length;
 
         // Condition 1: ≤1 player for 10 minutes
         if (queue.length <= 1 && (now - lowPlayerSince >= IDLE_LOW_PLAYER_MS)) {
@@ -744,7 +757,7 @@
             const res = await fetch('/api/idle-clear', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ tableCode: TABLE_CODE })
+                body: JSON.stringify({ tableCode: TABLE_CODE, source: 'board' })
             });
             const data = await res.json();
             if (data.cleared > 0) {
@@ -763,7 +776,7 @@
             const res = await fetch('/api/idle-restore', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ tableCode: TABLE_CODE })
+                body: JSON.stringify({ tableCode: TABLE_CODE, source: 'board' })
             });
             const data = await res.json();
             if (data.success) {
@@ -889,7 +902,8 @@
             // Initialize idle tracking
             lastQueueSnapshot = JSON.stringify(queue.map(e => e.id + ':' + e.position));
             lastQueueChangeTime = Date.now();
-            lowPlayerSince = queue.length >= 2 ? Date.now() : Date.now();
+            lastQueueLength = queue.length;
+            lowPlayerSince = Date.now();
             render();
         } catch (err) {
             console.error('Init fetch failed:', err);
@@ -1452,6 +1466,7 @@
         const adLeft = document.getElementById('idleAdLeft');
         const adRight = document.getElementById('idleAdRight');
         const welcomeScreen = document.getElementById('stateWelcome');
+        const emptyScreen = document.getElementById('stateEmpty');
         boardIsIdle = isIdle;
 
         if (!hasAds) {
@@ -1461,6 +1476,7 @@
             adLeft.classList.remove('active');
             adRight.classList.remove('active');
             welcomeScreen.classList.remove('has-ad');
+            emptyScreen.classList.remove('has-ad');
             return;
         }
 
@@ -1471,6 +1487,7 @@
             adLeft.classList.add('active');
             adRight.classList.add('active');
             welcomeScreen.classList.add('has-ad');
+            emptyScreen.classList.add('has-ad');
             showCurrentAd('idle');
         } else {
             overlay.classList.remove('active');
@@ -1478,6 +1495,7 @@
             adLeft.classList.remove('active');
             adRight.classList.remove('active');
             welcomeScreen.classList.remove('has-ad');
+            emptyScreen.classList.remove('has-ad');
             banner.style.display = 'flex';
             showCurrentAd('banner');
         }
@@ -1620,7 +1638,7 @@
         await fetch('/api/session/close', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ tableCode: TABLE_CODE, pin: '0000' })
+          body: JSON.stringify({ tableCode: TABLE_CODE, source: 'board' })
         });
       } catch (err) { console.error(err); }
     }

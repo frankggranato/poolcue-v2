@@ -1303,14 +1303,19 @@ async function closeAllSessions() {
 async function getBarForTableCode(tableCode) {
   // Look up bar by matching session's table_code to a bar slug
   // Convention: tableCode starts with bar slug (e.g. "flanagans" or "flanagans-2")
+  // For overlapping slugs (e.g. "foo" and "foo-bar"), prefer the longest match
+  // so "foo-bar-2" maps to "foo-bar", not "foo".
   if (useMemory) {
-    for (const bar of mem.bars) {
-      if (tableCode === bar.slug || tableCode.startsWith(bar.slug + '-')) return bar;
-    }
-    return null;
+    const matches = mem.bars.filter(bar =>
+      tableCode === bar.slug || tableCode.startsWith(bar.slug + '-')
+    );
+    if (matches.length === 0) return null;
+    matches.sort((a, b) => b.slug.length - a.slug.length);
+    return matches[0];
   }
   const res = await pool.query(
-    `SELECT * FROM bars WHERE $1 = slug OR $1 LIKE slug || '-%' LIMIT 1`,
+    `SELECT * FROM bars WHERE $1 = slug OR $1 LIKE slug || '-%'
+     ORDER BY length(slug) DESC LIMIT 1`,
     [tableCode]
   );
   return res.rows[0] || null;

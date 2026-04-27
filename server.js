@@ -189,7 +189,7 @@ app.get('/api/queue/:tableCode', async (req, res) => {
   try {
     const session = await db.getSession(req.params.tableCode);
     if (!session) return res.json({ queue: [], session: null });
-    await db.clearStaleQueue(session.id);
+    const cleared = await db.clearStaleQueue(session.id);
     const queue = await db.getQueue(session.id);
     const avgTime = await db.getAvgGameTime(session.id);
     const phoneId = getPhoneId(req, res);
@@ -204,6 +204,8 @@ app.get('/api/queue/:tableCode', async (req, res) => {
       avg_game_seconds: avgTime,
       my_entry: myEntry || null
     });
+    // If we just cleared stale entries, push update to other connected clients
+    if (cleared) broadcastQueueUpdate(req.params.tableCode).catch(() => {});
   } catch (err) {
     console.error('GET /api/queue error:', err);
     res.status(500).json({ error: 'server_error' });
@@ -331,10 +333,15 @@ app.post('/api/undo', async (req, res) => {
   }
 });
 
-// Idle clear — board auto-wipes after inactivity (no PIN needed, board-only)
+// Idle clear — board auto-wipes after inactivity (board source or PIN required)
 app.post('/api/idle-clear', async (req, res) => {
   try {
-    const { tableCode } = req.body;
+    const { tableCode, pin, source } = req.body;
+    if (source !== 'board' && pin !== SESSION_PIN) return res.status(403).json({ error: 'bad_pin' });
+    // Rate limit: 4 idle-clears per minute per table (prevents abuse / accidental loops)
+    if (rateLimit(`idle-clear:${tableCode}`, 4)) {
+      return res.status(429).json({ error: 'too_fast' });
+    }
     const session = await db.getSession(tableCode);
     if (!session) return res.status(404).json({ error: 'no_session' });
     const result = await db.idleClearQueue(session.id);
@@ -347,10 +354,11 @@ app.post('/api/idle-clear', async (req, res) => {
   }
 });
 
-// Idle restore — undo the auto-wipe (no PIN needed, board-only)
+// Idle restore — undo the auto-wipe (board source or PIN required)
 app.post('/api/idle-restore', async (req, res) => {
   try {
-    const { tableCode } = req.body;
+    const { tableCode, pin, source } = req.body;
+    if (source !== 'board' && pin !== SESSION_PIN) return res.status(403).json({ error: 'bad_pin' });
     const session = await db.getSession(tableCode);
     if (!session) return res.status(404).json({ error: 'no_session' });
     const result = await db.idleRestoreQueue(session.id);
@@ -380,8 +388,9 @@ app.post('/api/session/start', async (req, res) => {
 // Close session
 app.post('/api/session/close', async (req, res) => {
   try {
-    const { tableCode, pin } = req.body;
-    if (pin !== SESSION_PIN) return res.status(403).json({ error: 'bad_pin' });
+    const { tableCode, pin, source } = req.body;
+    // Board-initiated close (debug panel after kiosk PIN unlock) skips PIN check
+    if (source !== 'board' && pin !== SESSION_PIN) return res.status(403).json({ error: 'bad_pin' });
     await db.closeSession(tableCode);
     broadcast(tableCode, { type: 'session_closed' });
     res.json({ success: true });
@@ -479,20 +488,7 @@ app.post('/api/debug/add-fake', async (req, res) => {
   }
 });
 
-// QR code image (PNG)
-app.get('/qr/:tableCode', async (req, res) => {
-  try {
-    const url = `${BASE_URL}/join/${req.params.tableCode}`;
-    const qr = await QRCode.toBuffer(url, {
-      width: 300, margin: 2,
-      color: { dark: '#000000', light: '#ffffff' }
-    });
-    res.type('image/png').send(qr);
-  } catch (err) {
-    console.error('QR generation error:', err);
-    res.status(500).send('QR error');
-  }
-});
+// QR code image (PNG) — handled by /qr/:tableCode route earlier (line ~170)
 
 // ============================================
 // Admin panel
