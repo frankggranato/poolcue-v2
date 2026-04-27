@@ -40,6 +40,46 @@
       margin-top: 8px;
     }
 
+    /* "At the Table" — keeps waiters connected to the live matchup */
+    .now-playing-card {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 12px;
+      padding: 12px 14px;
+      margin-bottom: 16px;
+    }
+    .now-playing-card.hidden { display: none; }
+    .now-playing-title {
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: var(--muted);
+      font-weight: 700;
+      margin-bottom: 8px;
+      text-align: center;
+    }
+    .now-playing-row {
+      display: flex; align-items: center; gap: 10px;
+    }
+    .np-player {
+      flex: 1; display: flex; align-items: center; gap: 6px;
+      font-size: 0.95rem; font-weight: 600; min-width: 0;
+    }
+    .np-player .np-icon { font-size: 1.05rem; flex-shrink: 0; }
+    .np-player .np-name {
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .np-player.king { color: var(--accent); }
+    .np-player.challenger { color: var(--danger); justify-content: flex-end; }
+    .np-streak {
+      font-size: 0.75rem; color: var(--accent); font-weight: 700;
+      flex-shrink: 0;
+    }
+    .np-vs {
+      font-size: 0.6rem; color: var(--dim); font-weight: 700;
+      letter-spacing: 1px; text-transform: uppercase; flex-shrink: 0;
+    }
+
     /* Big confirm button */
     .confirm-section {
       margin: 16px 0;
@@ -178,7 +218,7 @@
   <div class="container">
     <!-- Sound unlock prompt -->
     <div id="soundPrompt" style="background: rgba(255,180,50,0.15); border: 1px solid rgba(255,180,50,0.3); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; text-align: center; font-size: 14px; color: #f0c040; cursor: pointer; font-weight: 500;" onclick="unlockAudio()">
-      🔔 Tap here to enable sound alerts
+      🔔 Get a buzz when you're up
     </div>
 
     <!-- Position hero -->
@@ -186,6 +226,23 @@
       <div class="position-number" id="posNumber">#—</div>
       <div><span class="role-label waiting" id="roleLabel">Loading...</span></div>
       <div class="wait-estimate" id="waitEstimate"></div>
+    </div>
+
+    <!-- "At the Table" — keeps waiters connected to live matchup (hidden when user is at table) -->
+    <div class="now-playing-card hidden" id="nowPlayingCard">
+      <div class="now-playing-title">At the Table</div>
+      <div class="now-playing-row">
+        <div class="np-player king">
+          <span class="np-icon">👑</span>
+          <span class="np-name" id="npKingName"></span>
+          <span class="np-streak" id="npKingStreak"></span>
+        </div>
+        <div class="np-vs">vs</div>
+        <div class="np-player challenger">
+          <span class="np-name" id="npChallengerName"></span>
+          <span class="np-icon">⚔️</span>
+        </div>
+      </div>
     </div>
 
     <!-- Confirm section (positions 2+) -->
@@ -366,6 +423,7 @@ function render() {
   // Not in queue anymore?
   if (!myEntry) {
     document.getElementById('positionHero').classList.add('hidden');
+    document.getElementById('nowPlayingCard').classList.add('hidden');
     document.getElementById('confirmSection').classList.add('hidden');
     document.getElementById('ghostWarning').classList.add('hidden');
     document.getElementById('shotCallerControls').classList.add('hidden');
@@ -411,6 +469,25 @@ function render() {
     roleEl.textContent = 'In Queue';
     roleEl.className = 'role-label waiting';
     waitEl.textContent = estimateWait(pos);
+  }
+
+  // "At the Table" card — show live matchup for waiters (pos 3+); hidden when user is at the table
+  const npCard = document.getElementById('nowPlayingCard');
+  const npKing = queue.find(e => e.position === 1);
+  const npChallenger = queue.find(e => e.position === 2);
+  if (pos >= 3 && npKing) {
+    const kingFull = npKing.player_name + (npKing.partner_name ? ` & ${npKing.partner_name}` : '');
+    document.getElementById('npKingName').textContent = kingFull;
+    document.getElementById('npKingStreak').textContent = npKing.win_streak >= 3 ? `🔥${npKing.win_streak}` : '';
+    if (npChallenger) {
+      const challFull = npChallenger.player_name + (npChallenger.partner_name ? ` & ${npChallenger.partner_name}` : '');
+      document.getElementById('npChallengerName').textContent = challFull;
+    } else {
+      document.getElementById('npChallengerName').textContent = 'Waiting…';
+    }
+    npCard.classList.remove('hidden');
+  } else {
+    npCard.classList.add('hidden');
   }
 
   // Alert on position change to challenger or king
