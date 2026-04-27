@@ -120,9 +120,14 @@
             align-self: center;
         }
         .board-tips.active { display: flex; }
+        .tips-label {
+            font-size: 0.75rem; font-weight: 700; color: #e5a147;
+            text-transform: uppercase; letter-spacing: 2px;
+            margin-bottom: 2px;
+        }
         .tip {
             display: flex; align-items: center; gap: 8px;
-            font-size: 1rem; color: #fff; letter-spacing: 0.3px;
+            font-size: 1rem; color: #cfcfcf; letter-spacing: 0.3px;
             white-space: nowrap;
         }
         .tip-icon {
@@ -520,6 +525,7 @@
                 </div> <!-- /now-playing-col -->
                 <!-- Board tips — inline in header row, between players and QR -->
                 <div class="board-tips" id="boardTips">
+                    <div class="tips-label">How To</div>
                     <div class="tip"><span class="tip-icon">👈</span> Swipe loser off the list</div>
                     <div class="tip"><span class="tip-icon">↩</span> Mistake? Undo bottom left</div>
                     <div class="tip"><span class="tip-icon">📱</span> Confirm you're ready on your phone</div>
