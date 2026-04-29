@@ -275,8 +275,8 @@ app.post('/api/result', async (req, res) => {
     if (!['king-wins', 'challenger-wins'].includes(result)) {
       return res.status(400).json({ error: 'invalid_result' });
     }
-    // Rate limit: 6 results per minute per table (prevents accidental double-taps)
-    if (rateLimit(`result:${tableCode}`, 6)) {
+    // Rate limit: 30 results per minute per table (abuse guard only — confirm modal handles double-taps)
+    if (rateLimit(`result:${tableCode}`, 30)) {
       return res.status(429).json({ error: 'too_fast' });
     }
     const session = await db.getSession(tableCode);
