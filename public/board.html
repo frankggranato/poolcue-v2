@@ -73,12 +73,12 @@
             padding-right: 170px; /* clear absolute QR section on the right */
         }
         .now-playing-col {
-            flex: 0 1 auto; min-width: 0;
+            flex: 0 1 auto; min-width: 0; max-width: 40%;
             display: flex; flex-direction: column;
         }
         .shot-caller-section { margin-bottom: 2px; }
         .now-playing-label { font-size: 0.75rem; font-weight: 700; color: #e5a147; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 2px; }
-        .shot-caller-name { font-size: 1.8rem; font-weight: 700; color: #fff; letter-spacing: -0.03em; line-height: 1.1; transition: opacity 0.2s; }
+        .shot-caller-name { font-size: 1.8rem; font-weight: 700; color: #fff; letter-spacing: -0.03em; line-height: 1.1; transition: opacity 0.2s; overflow-wrap: anywhere; }
         .shot-caller-name.flash { animation: nameFlash 0.5s ease-out; }
         @keyframes nameFlash {
             0% { opacity: 0; transform: scale(0.95); }
@@ -161,7 +161,7 @@
             margin: 6px 0 4px;
         }
         .challenger-label { font-size: 0.75rem; font-weight: 700; color: #ef4444; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 2px; }
-        .challenger-name { font-size: 1.5rem; font-weight: 600; color: #fff; line-height: 1.2; transition: opacity 0.2s; }
+        .challenger-name { font-size: 1.5rem; font-weight: 600; color: #fff; line-height: 1.2; transition: opacity 0.2s; overflow-wrap: anywhere; }
         .challenger-name .partner { color: #aaa; }
         .challenger-status { margin-top: 2px; }
         .challenger-section .hint { font-size: 0.7rem; color: #444; margin-top: 2px; }
